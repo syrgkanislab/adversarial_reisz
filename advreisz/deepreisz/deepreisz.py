@@ -107,8 +107,7 @@ class DeepReisz:
             if self.verbose > 0:
                 print("Epoch #", epoch, sep="")
 
-            for it, xb in enumerate(self.train_dl):
-                xb, = xb
+            for it, (xb,) in enumerate(self.train_dl):
                 xb = xb.to(device)
 
                 if (it % train_learner_every == 0):
