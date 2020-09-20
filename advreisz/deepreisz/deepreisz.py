@@ -1,4 +1,5 @@
 import os
+import copy
 import numpy as np
 import tempfile
 import torch
@@ -38,7 +39,7 @@ class DeepReisz:
         self.adversary = adversary
         self.moment_fn = moment_fn
 
-    def _pretrain(self, X,
+    def _pretrain(self, X, Xval,
                   learner_l2, adversary_l2, adversary_norm_reg,
                   learner_lr, adversary_lr, n_epochs, bs, train_learner_every, train_adversary_every,
                   warm_start, logger, model_dir, device, verbose):
@@ -73,9 +74,94 @@ class DeepReisz:
         if logger is not None:
             self.writer = SummaryWriter()
 
-        return X
+        return X, Xval
 
-    def fit(self, X,
+    def _fit(self, X, preprocess, Xval=None, preprocess_epochs=100, earlystop_rounds=20,
+             learner_l2=1e-3, adversary_l2=1e-4, adversary_norm_reg=1e-3,
+             learner_lr=0.001, adversary_lr=0.001, n_epochs=100, bs=100, train_learner_every=1, train_adversary_every=1,
+             warm_start=False, logger=None, model_dir='.', device=None, verbose=0):
+
+        X, Xval = self._pretrain(X, Xval,
+                                 learner_l2, adversary_l2, adversary_norm_reg,
+                                 learner_lr, adversary_lr, n_epochs, bs, train_learner_every, train_adversary_every,
+                                 warm_start, logger, model_dir, device, verbose)
+
+        if preprocess:  # if we are in preprocessing for earlystopping
+            self.momentval = []
+            self.fval = []
+            n_epochs = preprocess_epochs
+        elif Xval is not None:  # if we are in normal training after preprocessing
+            min_eval = np.inf
+            time_since_last_improvement = 0
+            best_learner_state_dict = copy.deepcopy(self.learner.state_dict())
+
+        for epoch in range(n_epochs):
+
+            if self.verbose > 0:
+                print("Epoch #", epoch, sep="")
+
+            for it, (xb,) in enumerate(self.train_dl):
+                xb = xb.to(device)
+
+                if (it % train_learner_every == 0):
+                    self.learner.train()
+                    D_loss = torch.mean(self.moment_fn(
+                        xb, self.adversary) - self.learner(xb) * self.adversary(xb))
+                    self.optimizerD.zero_grad()
+                    D_loss.backward()
+                    self.optimizerD.step()
+                    self.learner.eval()
+
+                if (it % train_adversary_every == 0):
+                    self.adversary.train()
+                    test = self.adversary(xb)
+                    G_loss = - torch.mean(self.moment_fn(
+                        xb, self.adversary) - self.learner(xb) * test) + torch.mean(test**2)
+                    self.optimizerG.zero_grad()
+                    G_loss.backward()
+                    self.optimizerG.step()
+                    self.adversary.eval()
+
+            if preprocess:  # if we are in preprocessing for earlystopping
+                self.momentval.append(self.moment_fn(
+                    Xval, self.adversary).cpu().detach().numpy().flatten())
+                self.fval.append(self.adversary(
+                    Xval).cpu().detach().numpy().flatten())
+            else:  # if we are in normal training
+                torch.save(self.learner, os.path.join(
+                    self.model_dir, "epoch{}".format(epoch)))
+
+                if logger is not None:
+                    logger(self.learner, self.adversary, epoch, self.writer)
+
+                if Xval is not None:  # if early stopping was enabled we check the out of sample violation
+                    ldev = self.learner(Xval).cpu().detach().numpy()
+                    curr_eval = np.max(
+                        np.abs(np.mean(self.momentval - ldev * self.fval, axis=0)))
+                    if self.verbose > 0:
+                        print("Validation moment violation:", curr_eval)
+                    if min_eval > curr_eval:
+                        min_eval = curr_eval
+                        time_since_last_improvement = 0
+                        best_learner_state_dict = copy.deepcopy(
+                            self.learner.state_dict())
+                    else:
+                        time_since_last_improvement += 1
+                        if time_since_last_improvement > earlystop_rounds:
+                            self.n_epochs = epoch + 1
+                            break
+
+        if preprocess:  # if we are in preprocessing for earlystopping
+            self.momentval = np.array(self.momentval).T
+            self.fval = np.array(self.fval).T
+        elif Xval is not None:  # if we are in normal training after preprocessing
+            self.learner.load_state_dict(best_learner_state_dict)
+            torch.save(self.learner, os.path.join(
+                self.model_dir, "earlystop"))
+
+        return self
+
+    def fit(self, X, Xval=None, preprocess_epochs=100, earlystop_rounds=20,
             learner_l2=1e-3, adversary_l2=1e-4, adversary_norm_reg=1e-3,
             learner_lr=0.001, adversary_lr=0.001, n_epochs=100, bs=100, train_learner_every=1, train_adversary_every=1,
             warm_start=False, logger=None, model_dir='.', device=None, verbose=0):
@@ -83,6 +169,9 @@ class DeepReisz:
         Parameters
         ----------
         X : features
+        Xval : validation set, if not None, then earlystopping is enabled based on out of sample moment violation
+        preprocess_epochs : how many epochs to train to construct a finite set of test functions to use for early stopping
+        earlystop_rounds : how many epochs to wait for an out of sample improvement
         learner_l2, adversary_l2 : l2_regularization of parameters of learner and adversary
         adversary_norm_reg : adveresary norm regularization weight
         learner_lr : learning rate of the Adam optimizer for learner
@@ -97,43 +186,22 @@ class DeepReisz:
         model_dir : folder where to store the learned models after every epoch
         """
 
-        X = self._pretrain(X,
-                           learner_l2, adversary_l2, adversary_norm_reg,
-                           learner_lr, adversary_lr, n_epochs, bs, train_learner_every, train_adversary_every,
-                           warm_start, logger, model_dir, device, verbose)
+        if Xval is not None:  # we have enabled early stopping
+            learner_state = copy.deepcopy(self.learner.state_dict())
+            adversary_state = copy.deepcopy(self.adversary.state_dict())
+            self._fit(X, True, Xval=Xval, preprocess_epochs=preprocess_epochs, earlystop_rounds=earlystop_rounds,
+                      learner_l2=learner_l2, adversary_l2=adversary_l2, adversary_norm_reg=adversary_norm_reg,
+                      learner_lr=learner_lr, adversary_lr=adversary_lr, n_epochs=n_epochs, bs=bs,
+                      train_learner_every=train_learner_every, train_adversary_every=train_adversary_every,
+                      warm_start=warm_start, logger=logger, model_dir=model_dir, device=device, verbose=verbose)
+            self.learner.load_state_dict(learner_state)
+            self.adversary.load_state_dict(adversary_state)
 
-        for epoch in range(n_epochs):
-
-            if self.verbose > 0:
-                print("Epoch #", epoch, sep="")
-
-            for it, (xb,) in enumerate(self.train_dl):
-                xb = xb.to(device)
-
-                if (it % train_learner_every == 0):
-                    self.learner.train()
-                    D_loss = torch.mean(self.moment_fn(
-                        xb, self.learner, self.adversary))
-                    self.optimizerD.zero_grad()
-                    D_loss.backward()
-                    self.optimizerD.step()
-                    self.learner.eval()
-
-                if (it % train_adversary_every == 0):
-                    self.adversary.train()
-                    test = self.adversary(xb)
-                    G_loss = - torch.mean(self.moment_fn(
-                        xb, self.learner, self.adversary)) + torch.mean(test**2)
-                    self.optimizerG.zero_grad()
-                    G_loss.backward()
-                    self.optimizerG.step()
-                    self.adversary.eval()
-
-            torch.save(self.learner, os.path.join(
-                self.model_dir, "epoch{}".format(epoch)))
-
-            if logger is not None:
-                logger(self.learner, self.adversary, epoch, self.writer)
+        self._fit(X, False, Xval=Xval, preprocess_epochs=preprocess_epochs, earlystop_rounds=earlystop_rounds,
+                  learner_l2=learner_l2, adversary_l2=adversary_l2, adversary_norm_reg=adversary_norm_reg,
+                  learner_lr=learner_lr, adversary_lr=adversary_lr, n_epochs=n_epochs, bs=bs,
+                  train_learner_every=train_learner_every, train_adversary_every=train_adversary_every,
+                  warm_start=warm_start, logger=logger, model_dir=model_dir, device=device, verbose=verbose)
 
         if logger is not None:
             self.writer.flush()
@@ -168,6 +236,9 @@ class DeepReisz:
         if model == 'final':
             return torch.load(os.path.join(self.model_dir,
                                            "epoch{}".format(self.n_epochs - 1)))(T).cpu().data.numpy().flatten()
+        if model == 'earlystop':
+            return torch.load(os.path.join(self.model_dir,
+                                           "earlystop"))(T).cpu().data.numpy().flatten()
         if isinstance(model, int):
             return torch.load(os.path.join(self.model_dir,
                                            "epoch{}".format(model)))(T).cpu().data.numpy().flatten()
