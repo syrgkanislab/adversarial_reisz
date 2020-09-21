@@ -30,10 +30,9 @@ class DeepReisz:
         ----------
         learner : a pytorch neural net module
         adversary : a pytorch neural net module
-        moment_fn : a function that takes as input a tuple (x, learner, adversary) and
-            evaluates the moment function at teach of the x's, with models learner, adversary.
-            The learner and adversary are torch models that take as input x and return the
-            outcome of each model.
+        moment_fn : a function that takes as input a tuple (x, adversary) and
+            evaluates the moment function at each of the x's, for a test function given by the adversary model.
+            The adversary is a torch model that take as input x and return the output of the test function.
         """
         self.learner = learner
         self.adversary = adversary
@@ -172,11 +171,14 @@ class DeepReisz:
         n_epochs : how many passes over the data
         bs : batch size
         train_learner_every : after how many training iterations of the adversary should we train the learner
+        train_adversary_every : after how many training iterations of the learner should we train the adversary
         warm_start : if False then network parameters are initialized at the beginning, otherwise we start
             from their current weights
         logger : a function that takes as input (learner, adversary, epoch, writer) and is called after every epoch
             Supposed to be used to log the state of the learning.
         model_dir : folder where to store the learned models after every epoch
+        device : name of device on which to perform all computation
+        verbose : whether to print messages related to progress of training
         """
 
         X, Xval = self._pretrain(X, Xval, bs=bs, warm_start=warm_start, logger=logger, model_dir=model_dir,
