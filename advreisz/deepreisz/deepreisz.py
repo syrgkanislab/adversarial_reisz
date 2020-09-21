@@ -39,9 +39,7 @@ class DeepReisz:
         self.adversary = adversary
         self.moment_fn = moment_fn
 
-    def _pretrain(self, X, Xval,
-                  learner_l2, adversary_l2, adversary_norm_reg,
-                  learner_lr, adversary_lr, n_epochs, bs, train_learner_every, train_adversary_every,
+    def _pretrain(self, X, Xval, *, bs,
                   warm_start, logger, model_dir, device, verbose):
         """ Prepares the variables required to begin training.
         """
@@ -51,8 +49,8 @@ class DeepReisz:
             os.makedirs(model_dir)
         self.tempdir = tempfile.TemporaryDirectory(dir=model_dir)
         self.model_dir = self.tempdir.name
+        self.device = device
 
-        self.n_epochs = n_epochs
         self.train_ds = TensorDataset(X)
         self.train_dl = DataLoader(self.train_ds, batch_size=bs, shuffle=True)
 
@@ -65,26 +63,20 @@ class DeepReisz:
             self.adversary.apply(lambda m: (
                 m.reset_parameters() if hasattr(m, 'reset_parameters') else None))
 
-        beta1 = 0.
-        self.optimizerD = OAdam(add_weight_decay(self.learner, learner_l2),
-                                lr=learner_lr, betas=(beta1, .01))
-        self.optimizerG = OAdam(add_weight_decay(
-            self.adversary, adversary_l2), lr=adversary_lr, betas=(beta1, .01))
-
-        if logger is not None:
+        self.logger = logger
+        if self.logger is not None:
             self.writer = SummaryWriter()
 
         return X, Xval
 
-    def _fit(self, X, preprocess, Xval=None, preprocess_epochs=100, earlystop_rounds=20,
-             learner_l2=1e-3, adversary_l2=1e-4, adversary_norm_reg=1e-3,
-             learner_lr=0.001, adversary_lr=0.001, n_epochs=100, bs=100, train_learner_every=1, train_adversary_every=1,
-             warm_start=False, logger=None, model_dir='.', device=None, verbose=0):
+    def _train(self, X, preprocess, *, Xval, preprocess_epochs, earlystop_rounds,
+               learner_l2, adversary_l2, learner_lr, adversary_lr,
+               n_epochs, bs, train_learner_every, train_adversary_every):
 
-        X, Xval = self._pretrain(X, Xval,
-                                 learner_l2, adversary_l2, adversary_norm_reg,
-                                 learner_lr, adversary_lr, n_epochs, bs, train_learner_every, train_adversary_every,
-                                 warm_start, logger, model_dir, device, verbose)
+        self.optimizerD = OAdam(add_weight_decay(self.learner, learner_l2),
+                                lr=learner_lr, betas=(0., .01))
+        self.optimizerG = OAdam(add_weight_decay(
+            self.adversary, adversary_l2), lr=adversary_lr, betas=(0., .01))
 
         if preprocess:  # if we are in preprocessing for earlystopping
             self.momentval = []
@@ -101,7 +93,6 @@ class DeepReisz:
                 print("Epoch #", epoch, sep="")
 
             for it, (xb,) in enumerate(self.train_dl):
-                xb = xb.to(device)
 
                 if (it % train_learner_every == 0):
                     self.learner.train()
@@ -131,8 +122,9 @@ class DeepReisz:
                 torch.save(self.learner, os.path.join(
                     self.model_dir, "epoch{}".format(epoch)))
 
-                if logger is not None:
-                    logger(self.learner, self.adversary, epoch, self.writer)
+                if self.logger is not None:
+                    self.logger(self.learner, self.adversary,
+                                epoch, self.writer)
 
                 if Xval is not None:  # if early stopping was enabled we check the out of sample violation
                     ldev = self.learner(Xval).cpu().detach().numpy()
@@ -148,22 +140,23 @@ class DeepReisz:
                     else:
                         time_since_last_improvement += 1
                         if time_since_last_improvement > earlystop_rounds:
-                            self.n_epochs = epoch + 1
                             break
 
         if preprocess:  # if we are in preprocessing for earlystopping
             self.momentval = np.array(self.momentval).T
             self.fval = np.array(self.fval).T
-        elif Xval is not None:  # if we are in normal training after preprocessing
-            self.learner.load_state_dict(best_learner_state_dict)
-            torch.save(self.learner, os.path.join(
-                self.model_dir, "earlystop"))
+        else:  # normal training
+            self.n_epochs = epoch + 1
+            if Xval is not None:  # if we are in normal training after preprocessing
+                self.learner.load_state_dict(best_learner_state_dict)
+                torch.save(self.learner, os.path.join(
+                    self.model_dir, "earlystop"))
 
         return self
 
-    def fit(self, X, Xval=None, preprocess_epochs=100, earlystop_rounds=20,
-            learner_l2=1e-3, adversary_l2=1e-4, adversary_norm_reg=1e-3,
-            learner_lr=0.001, adversary_lr=0.001, n_epochs=100, bs=100, train_learner_every=1, train_adversary_every=1,
+    def fit(self, X, Xval=None, *, preprocess_epochs=100, earlystop_rounds=20,
+            learner_l2=1e-3, adversary_l2=1e-4, learner_lr=0.001, adversary_lr=0.001,
+            n_epochs=100, bs=100, train_learner_every=1, train_adversary_every=1,
             warm_start=False, logger=None, model_dir='.', device=None, verbose=0):
         """
         Parameters
@@ -172,8 +165,8 @@ class DeepReisz:
         Xval : validation set, if not None, then earlystopping is enabled based on out of sample moment violation
         preprocess_epochs : how many epochs to train to construct a finite set of test functions to use for early stopping
         earlystop_rounds : how many epochs to wait for an out of sample improvement
-        learner_l2, adversary_l2 : l2_regularization of parameters of learner and adversary
-        adversary_norm_reg : adveresary norm regularization weight
+        learner_l2 : l2_regularization of parameters of learner
+        adversary_l2 : l2_regularization of parameters of adversary
         learner_lr : learning rate of the Adam optimizer for learner
         adversary_lr : learning rate of the Adam optimizer for adversary
         n_epochs : how many passes over the data
@@ -186,22 +179,25 @@ class DeepReisz:
         model_dir : folder where to store the learned models after every epoch
         """
 
+        X, Xval = self._pretrain(X, Xval, bs=bs, warm_start=warm_start, logger=logger, model_dir=model_dir,
+                                 device=device, verbose=verbose)
+
         if Xval is not None:  # we have enabled early stopping
             learner_state = copy.deepcopy(self.learner.state_dict())
             adversary_state = copy.deepcopy(self.adversary.state_dict())
-            self._fit(X, True, Xval=Xval, preprocess_epochs=preprocess_epochs, earlystop_rounds=earlystop_rounds,
-                      learner_l2=learner_l2, adversary_l2=adversary_l2, adversary_norm_reg=adversary_norm_reg,
-                      learner_lr=learner_lr, adversary_lr=adversary_lr, n_epochs=n_epochs, bs=bs,
-                      train_learner_every=train_learner_every, train_adversary_every=train_adversary_every,
-                      warm_start=warm_start, logger=logger, model_dir=model_dir, device=device, verbose=verbose)
+            # we train in preprocess mode to create a finite representative set of test functions to use for
+            # computationally easy out-of-sample validation
+            self._train(X, True, Xval=Xval, preprocess_epochs=preprocess_epochs, earlystop_rounds=earlystop_rounds,
+                        learner_l2=learner_l2, adversary_l2=adversary_l2,
+                        learner_lr=learner_lr, adversary_lr=adversary_lr, n_epochs=n_epochs, bs=bs,
+                        train_learner_every=train_learner_every, train_adversary_every=train_adversary_every)
             self.learner.load_state_dict(learner_state)
             self.adversary.load_state_dict(adversary_state)
 
-        self._fit(X, False, Xval=Xval, preprocess_epochs=preprocess_epochs, earlystop_rounds=earlystop_rounds,
-                  learner_l2=learner_l2, adversary_l2=adversary_l2, adversary_norm_reg=adversary_norm_reg,
-                  learner_lr=learner_lr, adversary_lr=adversary_lr, n_epochs=n_epochs, bs=bs,
-                  train_learner_every=train_learner_every, train_adversary_every=train_adversary_every,
-                  warm_start=warm_start, logger=logger, model_dir=model_dir, device=device, verbose=verbose)
+        self._train(X, False, Xval=Xval, preprocess_epochs=preprocess_epochs, earlystop_rounds=earlystop_rounds,
+                    learner_l2=learner_l2, adversary_l2=adversary_l2,
+                    learner_lr=learner_lr, adversary_lr=adversary_lr, n_epochs=n_epochs, bs=bs,
+                    train_learner_every=train_learner_every, train_adversary_every=train_adversary_every)
 
         if logger is not None:
             self.writer.flush()
