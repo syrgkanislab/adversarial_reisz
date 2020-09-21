@@ -121,18 +121,14 @@ class DeepReisz:
                 torch.save(self.learner, os.path.join(
                     self.model_dir, "epoch{}".format(epoch)))
 
-                if self.logger is not None:
-                    self.logger(self.learner, self.adversary,
-                                epoch, self.writer)
-
                 if Xval is not None:  # if early stopping was enabled we check the out of sample violation
                     ldev = self.learner(Xval).cpu().detach().numpy()
-                    curr_eval = np.max(
+                    self.curr_eval = np.max(
                         np.abs(np.mean(self.momentval - ldev * self.fval, axis=0)))
                     if self.verbose > 0:
-                        print("Validation moment violation:", curr_eval)
-                    if min_eval > curr_eval:
-                        min_eval = curr_eval
+                        print("Validation moment violation:", self.curr_eval)
+                    if min_eval > self.curr_eval:
+                        min_eval = self.curr_eval
                         time_since_last_improvement = 0
                         best_learner_state_dict = copy.deepcopy(
                             self.learner.state_dict())
@@ -140,6 +136,10 @@ class DeepReisz:
                         time_since_last_improvement += 1
                         if time_since_last_improvement > earlystop_rounds:
                             break
+
+                if self.logger is not None:
+                    self.logger(self, self.learner, self.adversary,
+                                epoch, self.writer)
 
         if preprocess:  # if we are in preprocessing for earlystopping
             self.momentval = np.array(self.momentval).T
