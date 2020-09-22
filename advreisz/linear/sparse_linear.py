@@ -76,12 +76,22 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
         d_x = X.shape[1]
         B = self.B
         T = self.n_iter
-        eta_theta = .5 if self.eta_theta == 'auto' else self.eta_theta
-        eta_w = .5 if self.eta_w == 'auto' else self.eta_w
         lambda_theta = self.lambda_theta
+        eta_theta = self.eta_theta
+        eta_w = self.eta_w
 
-        cov = np.mean(cross_product(X, X), axis=0).reshape(
-            d_x, d_x) if d_x < n else None
+        if (eta_theta == 'auto') or (eta_w == 'auto') or (d_x < n):
+            V = np.mean(cross_product(X, X), axis=0)
+
+        if (eta_theta == 'auto') or (eta_w == 'auto'):
+            Vmax = np.linalg.norm(V, ord=np.inf)
+            eta_theta = 1 / (4 * Vmax)
+            eta_w = 1 / (4 * Vmax)
+
+        self.eta_theta_ = eta_theta
+        self.eta_w_ = eta_w
+
+        cov = V.reshape(d_x, d_x) if d_x < n else None
 
         self.log_theta_list = []
         self.log_w_list = []
@@ -151,9 +161,9 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
                     time_since_drop = 0
 
                 if time_since_drop > 5:
-                    print("gap increased ", t, last_gap, self.duality_gap_)
-                    eta_theta /= 1.01
-                    eta_w /= 1.01
+                    #print("gap increased ", t, last_gap, self.duality_gap_)
+                    #eta_theta /= 1.01
+                    #eta_w /= 1.01
                     time_since_drop = 0
 
                 last_gap = self.duality_gap_
