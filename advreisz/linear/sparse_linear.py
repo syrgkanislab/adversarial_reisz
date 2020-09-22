@@ -86,6 +86,7 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
         self.log_theta_list = []
         self.log_w_list = []
         last_gap = np.inf
+        time_since_drop = 0
         t = 1
         while t < T:
             t += 1
@@ -134,16 +135,27 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
             if t % 50 == 0:
                 self.coef_ = theta_acc[:d_x] - theta_acc[d_x:]
                 self.w_ = w_acc[:d_x] - w_acc[d_x:]
+
                 if self._check_duality_gap(X, moment_vec, cov):
                     break
                 self.duality_gaps.append(self.duality_gap_)
+
                 if np.isnan(self.duality_gap_):
+                    print("found nan ", t)
                     eta_theta /= 2
                     eta_w /= 2
                     t = 1
                 elif last_gap < self.duality_gap_:
+                    time_since_drop += 1
+                else:
+                    time_since_drop = 0
+
+                if time_since_drop > 5:
+                    print("gap increased ", t, last_gap, self.duality_gap_)
                     eta_theta /= 1.01
                     eta_w /= 1.01
+                    time_since_drop = 0
+
                 last_gap = self.duality_gap_
                 self.log_theta_list.append(log_theta.copy())
                 self.log_w_list.append(log_w.copy())
