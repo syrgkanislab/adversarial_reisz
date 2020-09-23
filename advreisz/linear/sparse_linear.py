@@ -4,6 +4,7 @@ from sklearn.base import clone
 from sklearn.preprocessing import PolynomialFeatures
 from .utilities import cross_product
 import scipy.special
+import warnings
 
 
 class _SparseLinearAdvRiesz:
@@ -95,8 +96,6 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
 
         self.log_theta_list = []
         self.log_w_list = []
-        last_gap = np.inf
-        time_since_drop = 0
         t = 1
         while t < T:
             t += 1
@@ -134,13 +133,13 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
             theta[:] = np.exp(log_theta)
 
             # update w
-            log_w[:] = log_w + 2 * eta_w * res - eta_w * res_pre
+            log_w[:] = log_w + 2 * eta_w * res - res_pre
             log_w[:] = log_w - scipy.special.logsumexp(log_w)
             w[:] = np.exp(log_w)
 
             theta_acc = theta_acc * (t - 1) / t + theta / t
             w_acc = w_acc * (t - 1) / t + w / t
-            res_pre[:] = res
+            res_pre[:] = eta_w * res
 
             if t % 50 == 0:
                 self.coef_ = theta_acc[:d_x] - theta_acc[d_x:]
@@ -155,18 +154,7 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
                     eta_theta /= 2
                     eta_w /= 2
                     t = 1
-                elif last_gap < self.duality_gap_:
-                    time_since_drop += 1
-                else:
-                    time_since_drop = 0
 
-                if time_since_drop > 5:
-                    #print("gap increased ", t, last_gap, self.duality_gap_)
-                    #eta_theta /= 1.01
-                    #eta_w /= 1.01
-                    time_since_drop = 0
-
-                last_gap = self.duality_gap_
                 self.log_theta_list.append(log_theta.copy())
                 self.log_w_list.append(log_w.copy())
 
@@ -176,5 +164,9 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
         self.w_ = w_acc[:d_x] - w_acc[d_x:]
 
         self._post_process(X, moment_vec, cov)
+
+        if self.duality_gap_ > self.tol:
+            warnings.warn("Maximum number of iterations reached and duality gap tolerance not achieved. "
+                          "Consider increasing the maximum number of iterations.")
 
         return self
