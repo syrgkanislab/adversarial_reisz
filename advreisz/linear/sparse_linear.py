@@ -12,6 +12,12 @@ class _SparseLinearAdvRiesz:
     def __init__(self, moment_fn, featurizer=None,
                  lambda_theta=0.01, B=100, eta_theta='auto', eta_w='auto',
                  n_iter=2000, tol=1e-2, sparsity=None):
+        """
+        moment_fn : lambda x, fn -> y, should take as input input the features x and a vector valued test function
+            fn and output the vector of test functions corresponding to each output of fn
+        featurizer : transformer, should adhere to the transfomer interface of sklearn. the reisz representer
+            is assumed to be linear in the features of x output by calling featurizer.fit_transform(x)
+        """
         self.moment_fn = moment_fn
         self.featurizer = featurizer if featurizer is not None else PolynomialFeatures(
             degree=1, include_bias=False)
@@ -71,8 +77,8 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
 
         Xraw = X
         X = self.featurizer.fit_transform(X)
-        moment_vec = np.mean(np.array([self.moment_fn(Xraw, lambda x: self.featurizer.transform(x)[:, i])
-                                       for i in range(X.shape[1])]), axis=1)
+        moment_vec = np.mean(self.moment_fn(
+            Xraw, lambda x: self.featurizer.transform(x)), axis=0)
         n = X.shape[0]
         d_x = X.shape[1]
         B = self.B
