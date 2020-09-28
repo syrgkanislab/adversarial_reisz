@@ -50,6 +50,11 @@ class DeepReisz:
         self.model_dir = self.tempdir.name
         self.device = device
 
+        if not torch.is_tensor(X):
+            X = torch.Tensor(X).to(self.device)
+        if (Xval is not None) and (not torch.is_tensor(Xval)):
+            Xval = torch.Tensor(Xval).to(self.device)
+
         self.train_ds = TensorDataset(X)
         self.train_dl = DataLoader(self.train_ds, batch_size=bs, shuffle=True)
 
@@ -68,7 +73,7 @@ class DeepReisz:
 
         return X, Xval
 
-    def _train(self, X, preprocess, *, Xval, preprocess_epochs, earlystop_rounds,
+    def _train(self, X, preprocess, *, Xval, preprocess_epochs, earlystop_rounds, store_test_every,
                learner_l2, adversary_l2, learner_lr, adversary_lr,
                n_epochs, bs, train_learner_every, train_adversary_every):
 
@@ -112,12 +117,14 @@ class DeepReisz:
                     self.optimizerG.step()
                     self.adversary.eval()
 
-            if preprocess:  # if we are in preprocessing for earlystopping
-                self.momentval.append(self.moment_fn(
-                    Xval, self.adversary).cpu().detach().numpy().flatten())
-                self.fval.append(self.adversary(
-                    Xval).cpu().detach().numpy().flatten())
-            else:  # if we are in normal training
+                # if we are in preprocessing for earlystopping
+                if preprocess and (it % store_test_every == 0):
+                    self.momentval.append(self.moment_fn(
+                        Xval, self.adversary).cpu().detach().numpy().flatten())
+                    self.fval.append(self.adversary(
+                        Xval).cpu().detach().numpy().flatten())
+
+            if not preprocess:  # if we are in normal training
                 torch.save(self.learner, os.path.join(
                     self.model_dir, "epoch{}".format(epoch)))
 
@@ -153,7 +160,7 @@ class DeepReisz:
 
         return self
 
-    def fit(self, X, Xval=None, *, preprocess_epochs=100, earlystop_rounds=20,
+    def fit(self, X, Xval=None, *, preprocess_epochs=100, earlystop_rounds=20, store_test_every=20,
             learner_l2=1e-3, adversary_l2=1e-4, learner_lr=0.001, adversary_lr=0.001,
             n_epochs=100, bs=100, train_learner_every=1, train_adversary_every=1,
             warm_start=False, logger=None, model_dir='.', device=None, verbose=0):
@@ -164,6 +171,7 @@ class DeepReisz:
         Xval : validation set, if not None, then earlystopping is enabled based on out of sample moment violation
         preprocess_epochs : how many epochs to train to construct a finite set of test functions to use for early stopping
         earlystop_rounds : how many epochs to wait for an out of sample improvement
+        store_test_every : after how many training iterations during preprocessing should we store a test function for early stopping
         learner_l2 : l2_regularization of parameters of learner
         adversary_l2 : l2_regularization of parameters of adversary
         learner_lr : learning rate of the Adam optimizer for learner
@@ -190,6 +198,7 @@ class DeepReisz:
             # we train in preprocess mode to create a finite representative set of test functions to use for
             # computationally easy out-of-sample validation
             self._train(X, True, Xval=Xval, preprocess_epochs=preprocess_epochs, earlystop_rounds=earlystop_rounds,
+                        store_test_every=store_test_every,
                         learner_l2=learner_l2, adversary_l2=adversary_l2,
                         learner_lr=learner_lr, adversary_lr=adversary_lr, n_epochs=n_epochs, bs=bs,
                         train_learner_every=train_learner_every, train_adversary_every=train_adversary_every)
@@ -197,6 +206,7 @@ class DeepReisz:
             self.adversary.load_state_dict(adversary_state)
 
         self._train(X, False, Xval=Xval, preprocess_epochs=preprocess_epochs, earlystop_rounds=earlystop_rounds,
+                    store_test_every=store_test_every,
                     learner_l2=learner_l2, adversary_l2=adversary_l2,
                     learner_lr=learner_lr, adversary_lr=adversary_lr, n_epochs=n_epochs, bs=bs,
                     train_learner_every=train_learner_every, train_adversary_every=train_adversary_every)
@@ -220,6 +230,9 @@ class DeepReisz:
         -------
         a : (n,) vector of learned reisz representers a(X)
         """
+        if not torch.is_tensor(T):
+            T = torch.Tensor(T).to(self.device)
+
         if model == 'avg':
             preds = np.array([torch.load(os.path.join(self.model_dir,
                                                       "epoch{}".format(i)))(T).cpu().data.numpy()
