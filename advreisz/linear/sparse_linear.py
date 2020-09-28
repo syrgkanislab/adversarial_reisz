@@ -88,17 +88,17 @@ class SparseLinearAdvRiesz(_SparseLinearAdvRiesz):
         eta_w = self.eta_w
 
         if (eta_theta == 'auto') or (eta_w == 'auto') or (d_x < n):
-            V = np.mean(cross_product(X, X), axis=0)
+            V = (X.T @ X) / X.shape[0]
 
         if (eta_theta == 'auto') or (eta_w == 'auto'):
-            Vmax = np.linalg.norm(V, ord=np.inf)
+            Vmax = np.linalg.norm(V.flatten(), ord=np.inf)
             eta_theta = 1 / (4 * Vmax)
             eta_w = 1 / (4 * Vmax)
 
         self.eta_theta_ = eta_theta
         self.eta_w_ = eta_w
 
-        cov = V.reshape(d_x, d_x) if d_x < n else None
+        cov = V if d_x < n else None
 
         self.log_theta_list = []
         self.log_w_list = []

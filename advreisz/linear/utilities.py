@@ -1,3 +1,5 @@
+from sklearn.base import BaseEstimator, TransformerMixin
+import copy
 import numpy as np
 from functools import reduce
 
@@ -35,3 +37,43 @@ def cross_product(*XS):
               for i in range(k)]
         return np.reshape(reduce(np.multiply, XS), (n, -1))
     return cross(XS)
+
+
+class SeparateFeaturizer(TransformerMixin, BaseEstimator):
+
+    def __init__(self, featurizer):
+        self.featurizer = copy.deepcopy(featurizer)
+
+    def transform(self, X):
+        T = X[:, [0]]
+        feats = self.featurizer.transform(X[:, 1:])
+        return np.hstack([T * feats, (1 - T) * feats])
+
+    def fit(self, X, y=None):
+        self.featurizer.fit(X[:, 1:], y)
+        return self
+
+    def fit_transform(self, X, y=None):
+        self.fit(X, y)
+        return self.transform(X)
+
+    def get_feature_names(self):
+        return ['T0 * {}'.format(i) for i in self.featurizer.get_feature_names()] +\
+            ['T1 * {}'.format(i) for i in self.featurizer.get_feature_names()]
+
+
+class CoordinatePolynomialFeatures(TransformerMixin, BaseEstimator):
+
+    def __init__(self, degree=1):
+        self.degree = degree
+
+    def transform(self, X):
+        for i in np.arange(2, self.degree + 1):
+            X = np.hstack([X, X**i])
+        return X
+
+    def fit(self, X, y=None):
+        return self
+
+    def fit_transform(self, X, y=None):
+        return self.transform(X)
