@@ -1,4 +1,4 @@
-from .deepreisz import DeepReisz
+from .deepreisz import AdvReisz
+from .nnreisz import DeepReisz
 
-
-__all__ = ['DeepReisz']
+__all__ = ['AdvReisz', 'DeepReisz']

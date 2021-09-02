@@ -22,7 +22,7 @@ def add_weight_decay(net, l2_value, skip_list=()):
     return [{'params': no_decay, 'weight_decay': 0.}, {'params': decay, 'weight_decay': l2_value}]
 
 
-class DeepReisz:
+class AdvReisz:
 
     def __init__(self, learner, adversary, moment_fn):
         """
