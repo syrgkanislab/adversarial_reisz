@@ -18,10 +18,33 @@ def binary_kernel(X, Y=None):
     return 1.0 * (X[:, [0]] == X[:, [0]].T) if Y is None else 1.0 * (X[:, [0]] == Y[:, [0]].T)
 
 def prod_kernel(X, Y=None, *, gamma):
+
+    if hasattr(gamma, '__len__'):
+        X = X.copy()
+        X[:, 1:] = X[:, 1:] * np.sqrt(gamma).reshape(1, -1)
+        if Y is not None:
+            Y = Y.copy()
+            Y[:, 1:] = Y[:, 1:] * np.sqrt(gamma).reshape(1, -1)
+        gamma = 1
+
     if Y is None:
         return rbf_kernel(X[:, 1:], gamma=gamma) * binary_kernel(X, Y)
     else:
         return rbf_kernel(X[:, 1:], Y[:, 1:], gamma=gamma) * binary_kernel(X, Y)
+
+class AutoKernel:
+
+    def __init__(self, *, type='var'):
+        self.type = type
+    
+    def fit(self, X):
+        if self.type == 'var':
+            self.gamma_ = 1/ ((X.shape[1] - 1) * np.var(X[:, 1:], axis=0))
+        if self.type == 'median':
+            self.gamma_ = np.array([1 / ((X.shape[1] - 1) * np.median(np.abs(X[:, [i]] - X[:, [i]].T))**2)
+                                    for i in np.arange(1, X.shape[1])])
+        self.kernel_ = lambda X, Y=None: prod_kernel(X, Y=Y, gamma=self.gamma_)
+        return self
 
 def moment_fn(x, test_fn):
     t1 = test_fn(np.hstack([np.ones((x.shape[0], 1)), x[:, 1:]]))
@@ -71,8 +94,14 @@ def all_experiments(n_samples_list, target_dir = '.', kernelid=0):
 
     if kernelid == 0:
         kernel = lambda X, Y=None: rbf_kernel(X, Y=Y, gamma=.1)
-    else:
+    elif kernelid == 1:
         kernel = lambda X, Y=None: prod_kernel(X, Y=Y, gamma=.1)
+    elif kernelid == 2:
+        kernel = AutoKernel(type='var')
+    elif kernelid == 3:
+        kernel = AutoKernel(type='median')
+    else:
+        raise AttributeError("Not implemented")
 
     true = 2.2
 

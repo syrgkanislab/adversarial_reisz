@@ -9,14 +9,20 @@ class AdvKernelReisz:
         self.regm = regm
     
     def fit(self, X):
+
+        if hasattr(self.kernel, 'fit'):
+            self.kernel_ = self.kernel.fit(X).kernel_
+        else:
+            self.kernel_ = self.kernel
+
         # X is [d; w], i.e. first column is d.
         X1 = np.hstack([np.ones((X.shape[0], 1)), X[:, 1:]])
         X0 = np.hstack([np.zeros((X.shape[0], 1)), X[:, 1:]])
         # Calculate K1, K2, K3, K4
-        K1 = self.kernel(X)
-        K2 = self.kernel(X, X1) - self.kernel(X, X0)
-        K3 = self.kernel(X1, X) - self.kernel(X0, X)
-        K4 = self.kernel(X1, X1) - self.kernel(X1, X0) - self.kernel(X0, X1) + self.kernel(X0, X0)
+        K1 = self.kernel_(X)
+        K2 = self.kernel_(X, X1) - self.kernel_(X, X0)
+        K3 = self.kernel_(X1, X) - self.kernel_(X0, X)
+        K4 = self.kernel_(X1, X1) - self.kernel_(X1, X0) - self.kernel_(X0, X1) + self.kernel_(X0, X0)
         # Expanded kernel matrix
         K = np.block([[K1, K2], [K3, K4]])
 
@@ -41,10 +47,10 @@ class AdvKernelReisz:
         self.beta = invOmega @ Omega @ invDelta @ V
         self.Xtrain = X.copy()
         return self
-    
+
     def predict(self, X):
         # calculate test kernel matrix and predictions
-        Ktest = self.kernel(X, self.Xtrain)
+        Ktest = self.kernel_(X, self.Xtrain)
         return Ktest @ self.beta
 
 
@@ -56,14 +62,20 @@ class KernelReisz:
         self.regl = regl
 
     def fit(self, X):
+        
+        if hasattr(self.kernel, 'fit'):
+            self.kernel_ = self.kernel.fit(X).kernel_
+        else:
+            self.kernel_ = self.kernel
+
         # X is [d; w], i.e. first column is d.
         X1 = np.hstack([np.ones((X.shape[0], 1)), X[:, 1:]])
         X0 = np.hstack([np.zeros((X.shape[0], 1)), X[:, 1:]])
         # Calculate K1, K2, K3, K4
-        K1 = self.kernel(X)
-        K2 = self.kernel(X, X1) - self.kernel(X, X0)
-        K3 = self.kernel(X1, X) - self.kernel(X0, X)
-        K4 = self.kernel(X1, X1) - self.kernel(X1, X0) - self.kernel(X0, X1) + self.kernel(X0, X0)
+        K1 = self.kernel_(X)
+        K2 = self.kernel_(X, X1) - self.kernel_(X, X0)
+        K3 = self.kernel_(X1, X) - self.kernel_(X0, X)
+        K4 = self.kernel_(X1, X1) - self.kernel_(X1, X0) - self.kernel_(X0, X1) + self.kernel_(X0, X0)
         # Expanded kernel matrix
         K = np.block([[K1, K2], [K3, K4]])
         
@@ -86,6 +98,6 @@ class KernelReisz:
 
     def predict(self, X):
         # calculate test kernel matrix and predictions
-        Ktest1 = self.kernel(X, self.Xtrain)
-        Ktest2 = self.kernel(X, self.X1train) - self.kernel(X, self.X0train)
+        Ktest1 = self.kernel_(X, self.Xtrain)
+        Ktest2 = self.kernel_(X, self.X1train) - self.kernel_(X, self.X0train)
         return np.block([Ktest1, Ktest2]) @ self.gamma
