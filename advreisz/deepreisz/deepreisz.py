@@ -6,8 +6,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch import optim
-from torch.utils.tensorboard import SummaryWriter
 from .oadam import OAdam
+from sklearn.model_selection import train_test_split
 
 
 def add_weight_decay(net, l2_value, skip_list=()):
@@ -69,6 +69,7 @@ class AdvReisz:
 
         self.logger = logger
         if self.logger is not None:
+            from torch.utils.tensorboard import SummaryWriter
             self.writer = SummaryWriter()
 
         return X, Xval
@@ -160,7 +161,7 @@ class AdvReisz:
 
         return self
 
-    def fit(self, X, Xval=None, *, preprocess_epochs=100, earlystop_rounds=20, store_test_every=20,
+    def fit(self, X, Xval=None, *, val_fr=None, preprocess_epochs=100, earlystop_rounds=20, store_test_every=20,
             learner_l2=1e-3, adversary_l2=1e-4, learner_lr=0.001, adversary_lr=0.001,
             n_epochs=100, bs=100, train_learner_every=1, train_adversary_every=1,
             warm_start=False, logger=None, model_dir='.', device=None, verbose=0):
@@ -188,6 +189,10 @@ class AdvReisz:
         device : name of device on which to perform all computation
         verbose : whether to print messages related to progress of training
         """
+
+        if (val_fr is not None) and (Xval is None):
+            print("Splitting")
+            X, Xval = train_test_split(X, test_size=val_fr, random_state=123)
 
         X, Xval = self._pretrain(X, Xval, bs=bs, warm_start=warm_start, logger=logger, model_dir=model_dir,
                                  device=device, verbose=verbose)

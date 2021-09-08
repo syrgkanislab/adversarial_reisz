@@ -12,10 +12,14 @@ import joblib
 import os
 import argparse
 from advreisz.kernel import KernelReisz, AdvKernelReisz
+from advreisz.linear import SparseLinearAdvRiesz
 
 
 def binary_kernel(X, Y=None):
     return 1.0 * (X[:, [0]] == X[:, [0]].T) if Y is None else 1.0 * (X[:, [0]] == Y[:, [0]].T)
+
+def binary_or_rbf_kernel(X, Y=None, *, gamma):
+    return binary_kernel(X, Y=Y) if len(np.unique(X)) == 2 else rbf_kernel(X, Y=Y, gamma=gamma)
 
 def prod_kernel(X, Y=None, *, gamma):
 
@@ -28,9 +32,12 @@ def prod_kernel(X, Y=None, *, gamma):
         gamma = 1
 
     if Y is None:
-        return rbf_kernel(X[:, 1:], gamma=gamma) * binary_kernel(X, Y)
+        # return np.product([binary_or_rbf_kernel(X[:, [t]], gamma=gamma) for t in np.arange(1, X.shape[1])], axis=0)  * binary_kernel(X, Y)
+        return rbf_kernel(X[:, 1:], gamma=gamma)  * binary_kernel(X, Y)
     else:
-        return rbf_kernel(X[:, 1:], Y[:, 1:], gamma=gamma) * binary_kernel(X, Y)
+        # return np.product([binary_or_rbf_kernel(X[:, [t]], Y=Y[:, [t]], gamma=gamma) for t in np.arange(1, X.shape[1])], axis=0)  * binary_kernel(X, Y)
+        return rbf_kernel(X[:, 1:], Y=Y[:, 1:], gamma=gamma) * binary_kernel(X, Y)
+
 
 class AutoKernel:
 
@@ -90,7 +97,7 @@ def exp(it, splin_fn, n_samples=None):
     return mean_ci(moment_fn(X, est.predict) + a_test * (y - est.predict(X)))
 
 
-def all_experiments(n_samples_list, target_dir = '.', kernelid=0):
+def kernel_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sample_its=100, kernelid=0):
 
     if kernelid == 0:
         kernel = lambda X, Y=None: rbf_kernel(X, Y=Y, gamma=.1)
@@ -108,21 +115,53 @@ def all_experiments(n_samples_list, target_dir = '.', kernelid=0):
     for n_samples in n_samples_list:
         reg = (1/n_samples)/100
         splin_fn = lambda: AdvKernelReisz(kernel=kernel, regm=6*reg, regl=reg)
-        results = Parallel(n_jobs=-1, verbose=3)(delayed(exp)(it, splin_fn, n_samples) for it in np.arange(1, 101).astype(int))
-        joblib.dump(results, os.path.join(target_dir, f'advreisz_nocfit_n_{n_samples}.jbl'))
-        results = Parallel(n_jobs=-1, verbose=3)(delayed(cfit_exp)(it, splin_fn, n_samples) for it in np.arange(1, 101).astype(int))
-        joblib.dump(results, os.path.join(target_dir, f'advreisz_5fold_cfit_n_{n_samples}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'advreisz_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(cfit_exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'advreisz_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
 
         splin_fn = lambda: KernelReisz(kernel=kernel, regl=6*reg)
-        results = Parallel(n_jobs=-1, verbose=3)(delayed(exp)(it, splin_fn, n_samples) for it in np.arange(1, 101).astype(int))
-        joblib.dump(results, os.path.join(target_dir, f'kernelreisz_nocfit_n_{n_samples}.jbl'))
-        results = Parallel(n_jobs=-1, verbose=3)(delayed(cfit_exp)(it, splin_fn, n_samples) for it in np.arange(1, 101).astype(int))
-        joblib.dump(results, os.path.join(target_dir, f'kernelreisz_5fold_cfit_n_{n_samples}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'kernelreisz_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(cfit_exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'kernelreisz_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+
+def splin_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sample_its=100):
+    feat = Pipeline([('p', PolynomialFeatures(degree=2, include_bias=False))])
+    feat.steps.append(('s', StandardScaler()))
+    feat.steps.append(('cnt', PolynomialFeatures(degree=1, include_bias=True)))
+    splin_fn = lambda: SparseLinearAdvRiesz(moment_fn, featurizer=feat,
+                                            n_iter=50000, lambda_theta=0.01, B=10,
+                                            tol=0.00001)
+    for n_samples in n_samples_list:
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'splin_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(cfit_exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'splin_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
 
 if __name__=="__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-n_samples", "--n_samples", type=int)
+    parser.add_argument("-method", "--method", type=int, default=0)
     parser.add_argument("-kernel", "--kernel", type=int, default=0)
+    parser.add_argument("-start_sample", "--start_sample", type=int, default=1)
+    parser.add_argument("-sample_its", "--sample_its", type=int, default=100)
     args = parser.parse_args()
-    all_experiments([args.n_samples], os.environ['AMLT_OUTPUT_DIR'], args.kernel)
+    if args.method == 0:
+        kernel_experiments([args.n_samples],
+                            target_dir=os.environ['AMLT_OUTPUT_DIR'],
+                            start_sample=args.start_sample,
+                            sample_its=args.sample_its,
+                            kernelid=args.kernel)
+    elif args.method == 1:
+        splin_experiments([args.n_samples],
+                          target_dir=os.environ['AMLT_OUTPUT_DIR'],
+                          start_sample=args.start_sample,
+                          sample_its=args.sample_its)

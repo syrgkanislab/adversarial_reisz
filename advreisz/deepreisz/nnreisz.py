@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch import optim
-from torch.utils.tensorboard import SummaryWriter
 from .oadam import OAdam
 
 
@@ -64,6 +63,7 @@ class DeepReisz:
 
         self.logger = logger
         if self.logger is not None:
+            from torch.utils.tensorboard import SummaryWriter
             self.writer = SummaryWriter()
 
         return X, Xval
