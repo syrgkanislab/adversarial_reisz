@@ -127,7 +127,7 @@ class AdvKernelReisz(BaseEstimator):
 
 
 # Direct loss
-class KernelReisz:
+class KernelReisz(BaseEstimator):
 
     def __init__(self, *, kernel, regl):
         self.kernel = kernel
@@ -245,9 +245,9 @@ class AdvNystromKernelReisz(BaseEstimator):
         S = v.T @ v / n
         Sreg = S + self.regl_ * np.eye(S.shape[0])
         invSreg = np.linalg.inv(Sreg)
-        Omega = S @ invSreg @ S + self.regm_ * np.eye(S.shape[0])
+        Omega = S @ invSreg @ S + 4 * self.regm_ * np.eye(S.shape[0])
         self.beta = np.linalg.inv(Omega) @ S @ invSreg @ mu
-        self.gamma = invSreg @ (mu - S @ self.beta)
+        self.gamma = .5 * invSreg @ (mu - S @ self.beta)
         self.nys_ = nys
         self.score_train_ = self.moment_violation(X, self.predict_test)
         return self
@@ -279,7 +279,7 @@ class AdvNystromKernelReisz(BaseEstimator):
         S = v.T @ v / n
         Sreg = S + regl * np.eye(S.shape[0])
         invSreg = np.linalg.inv(Sreg)
-        gamma = invSreg @ (mu - S @ self.beta)
+        gamma = .5 * invSreg @ (mu - S @ self.beta)
         return lambda x: self._predict_test(x, nys, gamma)
 
     def max_moment_violation(self, X, regl):
@@ -296,7 +296,7 @@ class AdvNystromKernelReisz(BaseEstimator):
 
 
 # Direct loss
-class NystromKernelReisz:
+class NystromKernelReisz(BaseEstimator):
 
     def __init__(self, *, kernel, regl, n_components, random_state=None):
         self.kernel = kernel

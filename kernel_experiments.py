@@ -11,7 +11,7 @@ from sklearn.metrics.pairwise import rbf_kernel, cosine_similarity, pairwise_ker
 import joblib
 import os
 import argparse
-from advreisz.kernel import KernelReisz, AdvKernelReisz
+from advreisz.kernel import KernelReisz, AdvKernelReisz, AdvNystromKernelReisz, NystromKernelReisz
 from advreisz.linear import SparseLinearAdvRiesz
 
 
@@ -129,6 +129,38 @@ def kernel_experiments(n_samples_list, *, target_dir = '.', start_sample=1, samp
         results = Parallel(n_jobs=-1, verbose=3)(delayed(cfit_exp)(it, splin_fn, n_samples)
                                                  for it in np.arange(start_sample, start_sample + sample_its).astype(int))
         joblib.dump(results, os.path.join(target_dir, f'kernelreisz_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+
+def nystrom_kernel_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sample_its=100, kernelid=0):
+
+    if kernelid == 0:
+        kernel = lambda X, Y=None: rbf_kernel(X, Y=Y, gamma=.1)
+    elif kernelid == 1:
+        kernel = lambda X, Y=None: prod_kernel(X, Y=Y, gamma=.1)
+    elif kernelid == 2:
+        kernel = AutoKernel(type='var')
+    elif kernelid == 3:
+        kernel = AutoKernel(type='median')
+    else:
+        raise AttributeError("Not implemented")
+
+    true = 2.2
+
+    for n_samples in n_samples_list:
+        splin_fn = lambda: AdvNystromKernelReisz(kernel=kernel, regm='auto', regl='auto', n_components=50, random_state=123)
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'advnystromreisz_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(cfit_exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'advnystromreisz_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+
+        splin_fn = lambda: NystromKernelReisz(kernel=kernel, regl='auto', n_components=50, random_state=123)
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'nystormkernelreisz_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(cfit_exp)(it, splin_fn, n_samples)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'nystormkernelreisz_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
 
 def splin_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sample_its=100):
     feat = Pipeline([('p', PolynomialFeatures(degree=2, include_bias=False))])
