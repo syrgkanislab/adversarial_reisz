@@ -1,4 +1,6 @@
-from .rkhs import AdvKernelReisz, KernelReisz
+from .rkhs import AdvKernelReisz, KernelReisz, AdvNystromKernelReisz, NystromKernelReisz
 
 __all__ = ['AdvKernelReisz',
-           'KernelReisz']
+           'AdvNystromKernelReisz',
+           'KernelReisz',
+           'NystromKernelReisz']

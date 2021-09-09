@@ -3,6 +3,7 @@ from sklearn.base import clone, BaseEstimator
 import scipy.linalg
 from sklearn.model_selection import train_test_split
 from scipy.linalg import pinv
+from utilities import Nystroem
 
 
 def moment_fn(x, test_fn):
@@ -187,6 +188,170 @@ class KernelReisz:
         Ktest1 = self.kernel_(X, self.Xtrain)
         Ktest2 = self.kernel_(X, self.X1train) - self.kernel_(X, self.X0train)
         return np.block([Ktest1, Ktest2]) @ self.gamma
+    
+    def score(self, X):
+        return np.mean(-2 * moment_fn(X, self.predict) + self.predict(X)**2)
+
+
+
+class AdvNystromKernelReisz(BaseEstimator):
+    
+    def __init__(self, *, kernel, regl, regm, n_components, random_state=None):
+        self.kernel = kernel
+        self.regl = regl
+        self.regm = regm
+        self.n_components = n_components
+        self.random_state = random_state
+
+    def opt_reg(self, X):
+        Xtrain, Xval = train_test_split(X, test_size=.5, random_state=123)
+        reglist = np.logspace(-10, 2, 14)
+        scores = [AdvNystromKernelReisz(kernel=self.kernel, regm=6*reg,
+                                        regl=reg, n_components=self.n_components,
+                                        random_state=self.random_state).fit(Xtrain).score(Xval)
+                  for reg in reglist]
+        self.scores_ = scores
+        self.reglist_ = reglist
+        opt = reglist[np.argmin(scores)]
+        return opt
+
+    def fit(self, X):
+
+        if self.regl == 'auto':
+            assert self.regm == 'auto', 'if regl==auto, then regm should also be'
+            self.regl_ = self.opt_reg(X)
+            self.regm_ = 6 * self.regl_
+        else:
+            self.regl_ = self.regl
+            self.regm_ = self.regm
+
+        if hasattr(self.kernel, 'fit'):
+            self.kernel_ = self.kernel.fit(X).kernel_
+        else:
+            self.kernel_ = self.kernel
+        
+        self.n_components_ = self.n_components
+
+        nys = Nystroem(kernel=self.kernel_, n_components=self.n_components_, random_state=self.random_state)
+        v = nys.fit_transform(X)
+
+        X1 = np.hstack([np.ones((X.shape[0], 1)), X[:, 1:]])
+        X0 = np.hstack([np.zeros((X.shape[0], 1)), X[:, 1:]])
+        v1 = nys.transform(X1)
+        v0 = nys.transform(X0)
+        mu = np.mean(v1 - v0, axis=0)
+
+        n = v.shape[0]
+        S = v.T @ v / n
+        Sreg = S + self.regl_ * np.eye(S.shape[0])
+        invSreg = np.linalg.inv(Sreg)
+        Omega = S @ invSreg @ S + self.regm_ * np.eye(S.shape[0])
+        self.beta = np.linalg.inv(Omega) @ S @ invSreg @ mu
+        self.gamma = invSreg @ (mu - S @ self.beta)
+        self.nys_ = nys
+        self.score_train_ = self.moment_violation(X, self.predict_test)
+        return self
+
+    def predict(self, X):
+        # calculate test kernel matrix and predictions
+        return self.nys_.transform(X) @ self.beta
+    
+    def _predict_test(self, X, nys, gamma):
+        return nys.transform(X) @ gamma
+
+    def predict_test(self, X):
+        return self._predict_test(X, self.nys_, self.gamma)
+    
+    def moment_violation(self, X, test_fn):
+        return np.mean(moment_fn(X, test_fn) - self.predict(X) * test_fn(X))
+
+    def opt_test_fn(self, X, regl):
+        nys = Nystroem(kernel=self.kernel_, n_components=self.n_components_, random_state=self.random_state)
+        v = nys.fit_transform(X)
+
+        X1 = np.hstack([np.ones((X.shape[0], 1)), X[:, 1:]])
+        X0 = np.hstack([np.zeros((X.shape[0], 1)), X[:, 1:]])
+        v1 = nys.transform(X1)
+        v0 = nys.transform(X0)
+        mu = np.mean(v1 - v0, axis=0)
+
+        n = v.shape[0]
+        S = v.T @ v / n
+        Sreg = S + regl * np.eye(S.shape[0])
+        invSreg = np.linalg.inv(Sreg)
+        gamma = invSreg @ (mu - S @ self.beta)
+        return lambda x: self._predict_test(x, nys, gamma)
+
+    def max_moment_violation(self, X, regl):
+        return self.moment_violation(X, self.opt_test_fn(X, regl))
+
+    def score(self, X):
+        Xval1, Xval2 = train_test_split(X, test_size=.5, random_state=123)
+        reglist = np.logspace(-8, 2, 12)
+        scores = [(self.moment_violation(Xval2, self.opt_test_fn(Xval1, regl)) + 
+                   self.moment_violation(Xval1, self.opt_test_fn(Xval2, regl)))/2
+                  for regl in reglist]
+        return np.max(scores)
+
+
+
+# Direct loss
+class NystromKernelReisz:
+
+    def __init__(self, *, kernel, regl, n_components, random_state=None):
+        self.kernel = kernel
+        self.regl = regl
+        self.n_components = n_components
+        self.random_state = random_state
+    
+    def opt_reg(self, X):
+        Xtrain, Xval = train_test_split(X, test_size=.5, random_state=123)
+        reglist = np.logspace(-8, 2, 12)
+        scores = [NystromKernelReisz(kernel=self.kernel, regl=reg,
+                                     n_components=self.n_components,
+                                     random_state=self.random_state).fit(Xtrain).score(Xval)
+                  for reg in reglist]
+        self.scores_ = scores
+        self.reglist_ = reglist
+        opt = reglist[np.argmin(scores)]
+        return opt
+
+    def fit(self, X):
+
+        if self.regl == 'auto':
+            self.regl_ = self.opt_reg(X)
+        else:
+            self.regl_ = self.regl
+
+        if hasattr(self.kernel, 'fit'):
+            self.kernel_ = self.kernel.fit(X).kernel_
+        else:
+            self.kernel_ = self.kernel
+
+        self.n_components_ = self.n_components
+
+        nys = Nystroem(kernel=self.kernel_, n_components=self.n_components_, random_state=self.random_state)
+        v = nys.fit_transform(X)
+
+        X1 = np.hstack([np.ones((X.shape[0], 1)), X[:, 1:]])
+        X0 = np.hstack([np.zeros((X.shape[0], 1)), X[:, 1:]])
+        v1 = nys.transform(X1)
+        v0 = nys.transform(X0)
+        mu = np.mean(v1 - v0, axis=0)
+    
+        n = v.shape[0]
+        S = v.T @ v / n
+        Sreg = S + self.regl_ * np.eye(S.shape[0])
+        invSreg = np.linalg.inv(Sreg)
+        
+        # Calculate gamma
+        self.gamma = invSreg @ mu
+        self.nys_ = nys
+        return self
+
+    def predict(self, X):
+        # calculate test kernel matrix and predictions
+        return self.nys_.transform(X) @ self.gamma
     
     def score(self, X):
         return np.mean(-2 * moment_fn(X, self.predict) + self.predict(X)**2)
