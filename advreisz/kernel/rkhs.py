@@ -266,13 +266,12 @@ class AdvNystromKernelReisz(BaseEstimator):
         return np.mean(moment_fn(X, test_fn) - self.predict(X) * test_fn(X))
 
     def opt_test_fn(self, X, regl):
-        nys = Nystroem(kernel=self.kernel_, n_components=self.n_components_, random_state=self.random_state)
-        v = nys.fit_transform(X)
+        v = self.nys_.transform(X)
 
         X1 = np.hstack([np.ones((X.shape[0], 1)), X[:, 1:]])
         X0 = np.hstack([np.zeros((X.shape[0], 1)), X[:, 1:]])
-        v1 = nys.transform(X1)
-        v0 = nys.transform(X0)
+        v1 = self.nys_.transform(X1)
+        v0 = self.nys_.transform(X0)
         mu = np.mean(v1 - v0, axis=0)
 
         n = v.shape[0]
@@ -280,7 +279,7 @@ class AdvNystromKernelReisz(BaseEstimator):
         Sreg = S + regl * np.eye(S.shape[0])
         invSreg = np.linalg.inv(Sreg)
         gamma = .5 * invSreg @ (mu - S @ self.beta)
-        return lambda x: self._predict_test(x, nys, gamma)
+        return lambda x: self._predict_test(x, self.nys_, gamma)
 
     def max_moment_violation(self, X, regl):
         return self.moment_violation(X, self.opt_test_fn(X, regl))
