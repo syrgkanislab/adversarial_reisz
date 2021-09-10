@@ -60,22 +60,22 @@ class AdvKernelReisz(BaseEstimator):
         invDelta = pinv(Delta)
 
         # Calculate Omega
-        Sigma = np.block([[K1 @ K1], [K3 @ K1]]).T
-        Omega = Sigma.copy()
-        Omega -= .5 * Sigma @ invDelta @ np.block([[K1 @ K1, K1 @ K2], [K3 @ K1, K3 @ K2]])
-        Omega -= .5 * n * self.regl_ * Sigma @ invDelta @ K
+        U = np.block([[K1], [K3]])
+        A = U @ K1
+        Omega = A.T @ invDelta @ A + 4 * n * self.regm_ * K1
 
         # Calculate V
         V = np.zeros(2 * n)
-        V[:n] = (1/n) * np.sum(K2, axis=1)
-        V[n:] = (1/n) * np.sum(K4, axis=1)
+        V[:n] = np.sum(K2, axis=1)
+        V[n:] = np.sum(K4, axis=1)
 
         # Calculate weight for each training sample
-        invOmega = pinv((1/n) * Omega @ invDelta @ Sigma.T + 2 * self.regm_ * K1)
-        self.beta = invOmega @ Omega @ invDelta @ V
-        self.gamma = .5 * invDelta @ (n * V - Sigma.T @ self.beta)
+        invOmega = pinv(Omega)
+        self.beta = invOmega @ A.T @ invDelta @ V
+        self.gamma = .5 * invDelta @ (V - A @ self.beta)
         self.Xtrain = X.copy()
         self.score_train_ = self.moment_violation(X, self.predict_test)
+
         return self
 
     def predict(self, X):
@@ -109,9 +109,9 @@ class AdvKernelReisz(BaseEstimator):
         Delta = np.block([[K1 @ K1, K1 @ K2], [K3 @ K1, K3 @ K2]]) + n * regl * K
         invDelta = pinv(Delta)
         V = np.zeros(2 * n)
-        V[:n] = (1/n) * np.sum(K2, axis=1)
-        V[n:] = (1/n) * np.sum(K4, axis=1)
-        gamma = .5 * invDelta @ (n * V - np.block([[K1], [K3]]) @ self.predict(X))
+        V[:n] = np.sum(K2, axis=1)
+        V[n:] = np.sum(K4, axis=1)
+        gamma = .5 * invDelta @ (V - np.block([[K1], [K3]]) @ self.predict(X))
         return lambda x: self._predict_test(x, X, gamma)
 
     def max_moment_violation(self, X, regl):
