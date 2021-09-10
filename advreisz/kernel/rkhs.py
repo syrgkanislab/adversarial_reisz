@@ -230,7 +230,7 @@ class AdvNystromKernelReisz(BaseEstimator):
         else:
             self.kernel_ = self.kernel
         
-        self.n_components_ = self.n_components
+        self.n_components_ = min(X.shape[0], self.n_components)
 
         nys = Nystroem(kernel=self.kernel_, n_components=self.n_components_, random_state=self.random_state)
         v = nys.fit_transform(X)
@@ -327,7 +327,7 @@ class NystromKernelReisz(BaseEstimator):
         else:
             self.kernel_ = self.kernel
 
-        self.n_components_ = self.n_components
+        self.n_components_ = min(X.shape[0], self.n_components)
 
         nys = Nystroem(kernel=self.kernel_, n_components=self.n_components_, random_state=self.random_state)
         v = nys.fit_transform(X)
