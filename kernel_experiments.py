@@ -13,6 +13,7 @@ import os
 import argparse
 from advreisz.kernel import KernelReisz, AdvKernelReisz, AdvNystromKernelReisz, NystromKernelReisz
 from advreisz.linear import SparseLinearAdvRiesz
+from debiased import DebiasedMoment
 
 
 def binary_kernel(X, Y=None):
@@ -130,6 +131,53 @@ def kernel_experiments(n_samples_list, *, target_dir = '.', start_sample=1, samp
                                                  for it in np.arange(start_sample, start_sample + sample_its).astype(int))
         joblib.dump(results, os.path.join(target_dir, f'kernelreisz_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
 
+
+def get_reg_fn(X, y):
+    est = LassoCV(max_iter=10000, random_state=123).fit(X, y)
+    return lambda: Lasso(alpha=est.alpha_, max_iter=10000, random_state=123)
+
+def get_advkernel_fn(X):
+    est = AdvKernelReisz(kernel=AutoKernel(type='var'), regm='auto', regl='auto')
+    reg = est.opt_reg(X)
+    print(est.scores_)
+    print(reg)
+    return lambda: AdvKernelReisz(kernel=AutoKernel(type='var'), regm=6*reg, regl=reg)
+
+def get_kernel_fn(X):
+    est = KernelReisz(kernel=AutoKernel(type='var'), regl='auto')
+    reg = est.opt_reg(X)
+    print(est.scores_)
+    print(reg)
+    return lambda: KernelReisz(kernel=AutoKernel(type='var'), regl=reg)
+
+def debiasedfit(it, n_samples, get_reisz_fn, get_reg_fn, n_splits):
+    df = pd.read_csv(f'rahul/sim_{it}.csv', index_col=0)
+    y = df['Y'].values
+    X = df[['D'] + [f'X{i}' for i in np.arange(1, 11)]].values
+    if n_samples is not None:
+        X, y = X[:n_samples], y[:n_samples]
+    est = DebiasedMoment(moment_fn=moment_fn, get_reisz_fn=get_reisz_fn, get_reg_fn=get_reg_fn, n_splits=n_splits)
+    est.fit(X, y)
+    p, _, l, u = est.avg_moment()
+    return p, l, u
+
+def auto_kernel_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sample_its=100):
+
+    for n_samples in n_samples_list:
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_advkernel_fn, get_reg_fn, 1)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'auto_advreisz_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_advkernel_fn, get_reg_fn, 5)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'auto_advreisz_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_kernel_fn, get_reg_fn, 1)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'auto_kernelreisz_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_kernel_fn, get_reg_fn, 5)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'auto_kernelreisz_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+
 def nystrom_kernel_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sample_its=100, kernelid=0):
 
     if kernelid == 0:
@@ -197,3 +245,8 @@ if __name__=="__main__":
                           target_dir=os.environ['AMLT_OUTPUT_DIR'],
                           start_sample=args.start_sample,
                           sample_its=args.sample_its)
+    elif args.method == 2:
+        auto_kernel_experiments([args.n_samples],
+                                 target_dir=os.environ['AMLT_OUTPUT_DIR'],
+                                 start_sample=args.start_sample,
+                                 sample_its=args.sample_its)

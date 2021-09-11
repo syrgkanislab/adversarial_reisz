@@ -19,9 +19,15 @@ class AdvKernelReisz(BaseEstimator):
         self.regm = regm
 
     def opt_reg(self, X):
+
+        if hasattr(self.kernel, 'fit'):
+            kernel = self.kernel.fit(X).kernel_
+        else:
+            kernel = self.kernel
+
         Xtrain, Xval = train_test_split(X, test_size=.5, random_state=123)
         reglist = np.logspace(-10, 2, 14)
-        scores = [AdvKernelReisz(kernel=self.kernel, regm=6*reg, regl=reg).fit(Xtrain).score(Xval)
+        scores = [AdvKernelReisz(kernel=kernel, regm=6*reg, regl=reg).fit(Xtrain).score(Xval)
                   for reg in reglist]
         self.scores_ = scores
         self.reglist_ = reglist
@@ -134,9 +140,14 @@ class KernelReisz(BaseEstimator):
         self.regl = regl
     
     def opt_reg(self, X):
+        if hasattr(self.kernel, 'fit'):
+            kernel = self.kernel.fit(X).kernel_
+        else:
+            kernel = self.kernel
+
         Xtrain, Xval = train_test_split(X, test_size=.5, random_state=123)
         reglist = np.logspace(-8, 2, 12)
-        scores = [KernelReisz(kernel=self.kernel, regl=reg).fit(Xtrain).score(Xval)
+        scores = [KernelReisz(kernel=kernel, regl=reg).fit(Xtrain).score(Xval)
                   for reg in reglist]
         self.scores_ = scores
         self.reglist_ = reglist
@@ -204,9 +215,14 @@ class AdvNystromKernelReisz(BaseEstimator):
         self.random_state = random_state
 
     def opt_reg(self, X):
+        if hasattr(self.kernel, 'fit'):
+            kernel = self.kernel.fit(X).kernel_
+        else:
+            kernel = self.kernel
+
         Xtrain, Xval = train_test_split(X, test_size=.5, random_state=123)
         reglist = np.logspace(-10, 2, 14)
-        scores = [AdvNystromKernelReisz(kernel=self.kernel, regm=6*reg,
+        scores = [AdvNystromKernelReisz(kernel=kernel, regm=6*reg,
                                         regl=reg, n_components=self.n_components,
                                         random_state=self.random_state).fit(Xtrain).score(Xval)
                   for reg in reglist]
@@ -304,9 +320,14 @@ class NystromKernelReisz(BaseEstimator):
         self.random_state = random_state
     
     def opt_reg(self, X):
+        if hasattr(self.kernel, 'fit'):
+            kernel = self.kernel.fit(X).kernel_
+        else:
+            kernel_ = self.kernel
+
         Xtrain, Xval = train_test_split(X, test_size=.5, random_state=123)
         reglist = np.logspace(-8, 2, 12)
-        scores = [NystromKernelReisz(kernel=self.kernel, regl=reg,
+        scores = [NystromKernelReisz(kernel=kernel, regl=reg,
                                      n_components=self.n_components,
                                      random_state=self.random_state).fit(Xtrain).score(Xval)
                   for reg in reglist]
