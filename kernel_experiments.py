@@ -4,16 +4,20 @@ import scipy.special
 import pandas as pd
 from joblib import Parallel, delayed
 from sklearn.model_selection import KFold
-from sklearn.linear_model import LassoCV, Lasso, LogisticRegressionCV
+from sklearn.linear_model import LassoCV, Lasso, LogisticRegressionCV, LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.metrics.pairwise import rbf_kernel, cosine_similarity, pairwise_kernels
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.base import clone
 import joblib
 import os
 import argparse
 from advreisz.kernel import KernelReisz, AdvKernelReisz, AdvNystromKernelReisz, NystromKernelReisz
 from advreisz.linear import SparseLinearAdvRiesz
 from debiased import DebiasedMoment
+from utilities import PluginRR
 
 
 def binary_kernel(X, Y=None):
@@ -150,6 +154,21 @@ def get_kernel_fn(X):
     print(reg)
     return lambda: KernelReisz(kernel=AutoKernel(type='var'), regl=reg)
 
+def get_lg_plugin_fn(X):
+    clf = LogisticRegressionCV(cv=3, max_iter=10000, random_state=123)
+    C_ = clf.fit(X[:, 1:], X[:, 0]).C_[0]
+    return lambda: PluginRR(model_t=LogisticRegression(C=C_, max_iter=10000, random_state=123),
+                            min_propensity=0)
+
+def get_rf_plugin_fn(X):
+    gcv = GridSearchCV(RandomForestClassifier(bootstrap=True, random_state=123),
+                       param_grid={'max_depth': [3, None],
+                                   'min_samples_leaf': [10, 50]},
+                       scoring='r2',
+                       cv=5)
+    best_model = clone(gcv.fit(X[:, 1:], X[:, 0]).best_estimator_)
+    return lambda: PluginRR(model_t=best_model, min_propensity=0)
+
 def debiasedfit(it, n_samples, get_reisz_fn, get_reg_fn, n_splits):
     df = pd.read_csv(f'rahul/sim_{it}.csv', index_col=0)
     y = df['Y'].values
@@ -177,6 +196,24 @@ def auto_kernel_experiments(n_samples_list, *, target_dir = '.', start_sample=1,
         results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_kernel_fn, get_reg_fn, 5)
                                                  for it in np.arange(start_sample, start_sample + sample_its).astype(int))
         joblib.dump(results, os.path.join(target_dir, f'auto_kernelreisz_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+
+
+def plugin_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sample_its=100):
+
+    for n_samples in n_samples_list:
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_lg_plugin_fn, get_reg_fn, 1)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'plugin_lg_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_lg_plugin_fn, get_reg_fn, 5)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'plugin_lg_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_rf_plugin_fn, get_reg_fn, 1)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'plugin_rf_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_rf_plugin_fn, get_reg_fn, 5)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'plugin_rf_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
 
 def nystrom_kernel_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sample_its=100, kernelid=0):
 
@@ -250,3 +287,8 @@ if __name__=="__main__":
                                  target_dir=os.environ['AMLT_OUTPUT_DIR'],
                                  start_sample=args.start_sample,
                                  sample_its=args.sample_its)
+    elif args.method == 3:
+        plugin_experiments([args.n_samples],
+                           target_dir=os.environ['AMLT_OUTPUT_DIR'],
+                           start_sample=args.start_sample,
+                           sample_its=args.sample_its)
