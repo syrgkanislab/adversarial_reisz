@@ -18,6 +18,7 @@ from advreisz.kernel import KernelReisz, AdvKernelReisz, AdvNystromKernelReisz, 
 from advreisz.linear import SparseLinearAdvRiesz
 from debiased import DebiasedMoment
 from utilities import PluginRR
+from advreisz.ensemble import AdvEnsembleReisz
 
 
 def binary_kernel(X, Y=None):
@@ -262,6 +263,21 @@ def splin_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sampl
                                                  for it in np.arange(start_sample, start_sample + sample_its).astype(int))
         joblib.dump(results, os.path.join(target_dir, f'splin_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
 
+
+def get_rf_fn(X):
+    return lambda: AdvEnsembleReisz(moment_fn=moment_fn, max_abs_value=9, degree=1)
+
+def rf_experiments(n_samples_list, *, target_dir = '.', start_sample=1, sample_its=100):
+
+    for n_samples in n_samples_list:
+        results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_rf_fn, get_reg_fn, 1)
+                                                 for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        joblib.dump(results, os.path.join(target_dir, f'rf_nocfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+        # results = Parallel(n_jobs=-1, verbose=3)(delayed(debiasedfit)(it, n_samples, get_rf_fn, get_reg_fn, 5)
+        #                                          for it in np.arange(start_sample, start_sample + sample_its).astype(int))
+        # joblib.dump(results, os.path.join(target_dir, f'rf_5fold_cfit_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
+
+
 if __name__=="__main__":
 
     parser = argparse.ArgumentParser()
@@ -292,3 +308,8 @@ if __name__=="__main__":
                            target_dir=os.environ['AMLT_OUTPUT_DIR'],
                            start_sample=args.start_sample,
                            sample_its=args.sample_its)
+    elif args.method == 4:
+        rf_experiments([args.n_samples],
+                        target_dir=os.environ['AMLT_OUTPUT_DIR'],
+                        start_sample=args.start_sample,
+                        sample_its=args.sample_its)
