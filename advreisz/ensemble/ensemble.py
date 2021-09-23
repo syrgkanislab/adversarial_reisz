@@ -110,11 +110,12 @@ class AdvEnsembleReisz(BaseEstimator):
 
     def _get_new_adversary(self):
         return RFrr(riesz_feature_fns=poly_feature_fns(self.degree), moment_fn=self.moment_fn, n_estimators=40, max_depth=2,
-                    min_samples_leaf=20, min_impurity_decrease=0.001, inference=False, honest=False) if self.adversary == 'auto' else clone(self.adversary)
+                    min_samples_leaf=20, min_impurity_decrease=0.001, inference=False, honest=True, random_state=123) if self.adversary == 'auto' else clone(self.adversary)
 
     def _get_new_learner(self):
         return RandomForestClassifier(n_estimators=5, max_depth=2, criterion='gini',
-                                      bootstrap=False, min_samples_leaf=20, min_impurity_decrease=0.001) if self.learner == 'auto' else clone(self.learner)
+                                      bootstrap=False, min_samples_leaf=20, min_impurity_decrease=0.001,
+                                      random_state=123) if self.learner == 'auto' else clone(self.learner)
 
     def fit(self, X):
         T, W = X[:, 0], X[:, 1:]

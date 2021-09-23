@@ -323,7 +323,7 @@ class NystromKernelReisz(BaseEstimator):
         if hasattr(self.kernel, 'fit'):
             kernel = self.kernel.fit(X).kernel_
         else:
-            kernel_ = self.kernel
+            kernel = self.kernel
 
         Xtrain, Xval = train_test_split(X, test_size=.5, random_state=123)
         reglist = np.logspace(-8, 2, 12)

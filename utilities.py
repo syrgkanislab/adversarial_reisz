@@ -5,6 +5,7 @@ import warnings
 from functools import partial
 
 import numpy as np
+import scipy
 import scipy.sparse as sp
 from scipy.linalg import svd
 try:
@@ -18,6 +19,59 @@ from sklearn.utils import check_random_state, as_float_array
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.validation import check_is_fitted
 from sklearn.metrics.pairwise import pairwise_kernels, KERNEL_PARAMS, PAIRWISE_KERNEL_FUNCTIONS, _parallel_pairwise, _pairwise_callable
+from sklearn.metrics.pairwise import rbf_kernel, cosine_similarity, pairwise_kernels
+
+
+def rmse(x, y):
+    return np.sqrt(np.mean((x - y)**2))
+
+def mean_ci(data, confidence=0.95):
+    a = 1.0 * np.array(data).flatten()
+    n = len(a)
+    m, se = np.mean(a), scipy.stats.sem(a)
+    h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
+    return m, se, m-h, m+h
+
+
+def binary_kernel(X, Y=None):
+    return 1.0 * (X[:, [0]] == X[:, [0]].T) if Y is None else 1.0 * (X[:, [0]] == Y[:, [0]].T)
+
+
+def binary_or_rbf_kernel(X, Y=None, *, gamma):
+    return binary_kernel(X, Y=Y) if len(np.unique(X)) == 2 else rbf_kernel(X, Y=Y, gamma=gamma)
+
+
+def prod_kernel(X, Y=None, *, gamma):
+
+    if hasattr(gamma, '__len__'):
+        X = X.copy()
+        X[:, 1:] = X[:, 1:] * np.sqrt(gamma).reshape(1, -1)
+        if Y is not None:
+            Y = Y.copy()
+            Y[:, 1:] = Y[:, 1:] * np.sqrt(gamma).reshape(1, -1)
+        gamma = 1
+
+    if Y is None:
+        # return np.product([binary_or_rbf_kernel(X[:, [t]], gamma=gamma) for t in np.arange(1, X.shape[1])], axis=0)  * binary_kernel(X, Y)
+        return rbf_kernel(X[:, 1:], gamma=gamma)  * binary_kernel(X, Y)
+    else:
+        # return np.product([binary_or_rbf_kernel(X[:, [t]], Y=Y[:, [t]], gamma=gamma) for t in np.arange(1, X.shape[1])], axis=0)  * binary_kernel(X, Y)
+        return rbf_kernel(X[:, 1:], Y=Y[:, 1:], gamma=gamma) * binary_kernel(X, Y)
+
+
+class AutoKernel:
+
+    def __init__(self, *, type='var'):
+        self.type = type
+    
+    def fit(self, X):
+        if self.type == 'var':
+            self.gamma_ = 1/ ((X.shape[1] - 1) * np.var(X[:, 1:], axis=0))
+        if self.type == 'median':
+            self.gamma_ = np.array([1 / ((X.shape[1] - 1) * np.median(np.abs(X[:, [i]] - X[:, [i]].T))**2)
+                                    for i in np.arange(1, X.shape[1])])
+        self.kernel_ = lambda X, Y=None: prod_kernel(X, Y=Y, gamma=self.gamma_)
+        return self
 
 class FitParamsWrapper:
 
