@@ -99,6 +99,26 @@ class PluginRR(BaseEstimator):
         propensity = np.clip(self.model_t_.predict_proba(X[:, 1:]), self.min_propensity, 1 - self.min_propensity)
         return X[:, 0] / propensity[:, 1] - (1 - X[:, 0]) / propensity[:, 0]
 
+class PluginRR2(BaseEstimator):
+    """Version of PluginRR() for when we want to counterfactually vary a single covariate \"A\" as well as the treatment \"D\""""
+
+    def __init__(self, *, model_t, min_propensity=0):
+        self.model_t = clone(model_t, safe=False)
+        self.min_propensity = min_propensity
+    
+    def fit(self, X):
+        self.model_t_A = clone(self.model_t, safe=False).fit(X[:, 2:], X[:, 1])
+        self.model_t_treat = clone(self.model_t, safe=False).fit(X[:, 1:], X[:, 0])
+        return self
+    
+    def predict(self, X):
+        n_obs = X.shape[0]
+        propensity_A = np.clip(self.model_t_A.predict_proba(X[:, 2:]), self.min_propensity, 1 - self.min_propensity)
+        propensity_treat_A0 = np.clip(self.model_t_treat.predict_proba(np.hstack([np.zeros((n_obs, 1)), X[:, 2:]])), self.min_propensity, 1 - self.min_propensity)
+        propensity_treat_A1 = np.clip(self.model_t_treat.predict_proba(np.hstack([np.ones((n_obs, 1)), X[:, 2:]])), self.min_propensity, 1 - self.min_propensity)
+        return X[:, 1]/propensity_A[:, 1] * (X[:, 0]/propensity_treat_A1[:, 1] - (1-X[:, 0])/propensity_treat_A1[:, 0])  \
+               - ((1 - X[:, 1])/propensity_A[:, 0]) * (X[:, 0]/propensity_treat_A0[:, 1] - (1-X[:, 0])/propensity_treat_A0[:, 0])
+
 
 
 def pairwise_kernels(X, Y=None, metric="linear", *, filter_params=False,
