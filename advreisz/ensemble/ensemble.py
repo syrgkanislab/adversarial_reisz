@@ -17,6 +17,20 @@ def poly_feature_fns(degree):
         return lambda x: sign * x[:, [0]]**d
     return [poly(t) for t in np.arange(0, degree + 1)]
 
+def interactive_poly_feature_fns(degree, n_treatments):
+    def poly(d, ind, sign=1.0):
+        return lambda x: sign * x[:, [ind]]**d
+    def interactions(d1, d2, ind1, ind2, sign=1.0):
+        return lambda x: sign * x[:, [ind1]]**(d1) * x[:, [ind2]]**(d2)
+    feat_fns = [poly(0, 0)]
+    for i in range(n_treatments):
+        feat_fns += [poly(t, i) for t in np.arange(1, degree + 1)]
+        for j in np.arange(i + 1, n_treatments):
+            feat_fns += [interactions(t, tp, i, j) 
+                         for t in np.arange(1, degree + 1)
+                         for tp in np.arange(1, degree + 2 - t)]
+    return feat_fns
+
 
 class RFrr(BaseGRF):
 
@@ -69,6 +83,7 @@ class RFrr(BaseGRF):
 
     def _get_alpha_and_pointJ(self, X, T, y):
         n_riesz_feats = len(self.riesz_feature_fns)
+        self.n_original_treatments_ = T.shape[1]
         TX = np.hstack([T, X])
         riesz_feats = np.hstack([feat_fn(TX)
                                  for feat_fn in self.riesz_feature_fns])
@@ -93,15 +108,17 @@ class RFrr(BaseGRF):
         return riesz
 
     def predict(self, TX_test):
-        point = super().predict(TX_test[:, 1:], interval=False)
+        point = super().predict(TX_test[:, self.n_original_treatments_:], interval=False)
         return self._translate(point, TX_test)
 
 
 class AdvEnsembleReisz(BaseEstimator):
 
-    def __init__(self, *, moment_fn, adversary='auto', learner='auto',
+    def __init__(self, *, moment_fn, n_treatments=1, 
+                 adversary='auto', learner='auto',
                  max_abs_value=4, n_iter=100, degree=2):
         self.moment_fn = moment_fn
+        self.n_treatments = n_treatments
         self.adversary = adversary
         self.learner = learner
         self.max_abs_value = max_abs_value
@@ -109,8 +126,10 @@ class AdvEnsembleReisz(BaseEstimator):
         self.degree = degree
 
     def _get_new_adversary(self):
-        return RFrr(riesz_feature_fns=poly_feature_fns(self.degree), moment_fn=self.moment_fn, n_estimators=40, max_depth=2,
-                    min_samples_leaf=20, min_impurity_decrease=0.001, inference=False, honest=True, random_state=123) if self.adversary == 'auto' else clone(self.adversary)
+        return RFrr(riesz_feature_fns=interactive_poly_feature_fns(self.degree, self.n_treatments),
+                    moment_fn=self.moment_fn, n_estimators=40, max_depth=2,
+                    min_samples_leaf=20, min_impurity_decrease=0.001, inference=False,
+                    honest=True, random_state=123) if self.adversary == 'auto' else clone(self.adversary)
 
     def _get_new_learner(self):
         return RandomForestClassifier(n_estimators=5, max_depth=2, criterion='gini',
@@ -118,7 +137,7 @@ class AdvEnsembleReisz(BaseEstimator):
                                       random_state=123) if self.learner == 'auto' else clone(self.learner)
 
     def fit(self, X):
-        T, W = X[:, 0], X[:, 1:]
+        T, W = X[:, :self.n_treatments], X[:, self.n_treatments:]
         max_value = self.max_abs_value
         adversary = self._get_new_adversary().fit(W, T, np.zeros(T.shape[0]))
         learners = []
