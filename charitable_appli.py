@@ -20,7 +20,7 @@ from advreisz.linear import SparseLinearAdvRiesz
 from advreisz.kernel import AdvNystromKernelReisz, AdvKernelReisz, NystromKernelReisz, KernelReisz
 from advreisz.deepreisz import AdvReisz
 from advreisz.ensemble import AdvEnsembleReisz, RFrr, interactive_poly_feature_fns
-from utilities import AutoKernel, prod_kernel, PluginRR2, FitParamsWrapper
+from utilities import AutoKernel, prod_kernel, PluginRR, PluginRR2, FitParamsWrapper
 
 
 
@@ -81,6 +81,21 @@ def get_kernel_fn(X):
 
 def get_lg_plugin_fn(X):
     clf = LogisticRegressionCV(cv=3, max_iter=10000, random_state=123)
+    C_ = clf.fit(X[:, 1:], X[:, 0]).C_[0]
+    return lambda: PluginRR(model_t=LogisticRegression(C=C_, max_iter=10000, random_state=123),
+                            min_propensity=0)
+
+def get_rf_plugin_fn(X):
+    gcv = GridSearchCV(RandomForestClassifier(bootstrap=True, random_state=123),
+                       param_grid={'max_depth': [3, None],
+                                   'min_samples_leaf': [10, 50]},
+                       scoring='r2',
+                       cv=5)
+    best_model = clone(gcv.fit(X[:, 1:], X[:, 0]).best_estimator_)
+    return lambda: PluginRR(model_t=best_model, min_propensity=0)
+
+def get_lg_plugin_fn2(X):
+    clf = LogisticRegressionCV(cv=3, max_iter=10000, random_state=123)
     C_ = clf.fit(X[:, 2:], X[:, 1]).C_[0]
     model_t_A = LogisticRegression(C=C_, max_iter=10000, random_state=123)
     clf = LogisticRegressionCV(cv=3, max_iter=10000, random_state=123)
@@ -89,7 +104,7 @@ def get_lg_plugin_fn(X):
     return lambda: PluginRR2(model_t_A=model_t_A, model_t_treat=model_t_treat,
                              min_propensity=1e-6)
 
-def get_rf_plugin_fn(X):
+def get_rf_plugin_fn2(X):
     gcv = GridSearchCV(RandomForestClassifier(bootstrap=True, random_state=123),
                        param_grid={'max_depth': [3, None],
                                    'min_samples_leaf': [10, 50]},
@@ -193,8 +208,8 @@ for q in np.arange(0, 1):  # Data not split up into quantiles
                                # ('rkhs', get_kernel_fn),
                                ('nys_advrkhs', get_advnyskernel_fn),
                                # ('nys_rkhs', get_nyskernel_fn),
-                               ('plugin_lg', get_lg_plugin_fn),
-                               ('plugin_rf', get_rf_plugin_fn),
+                               ('plugin_lg', get_lg_plugin_fn2),
+                               ('plugin_rf', get_rf_plugin_fn2),
                                ('advnnet', get_agmm_fn),
                                ('advrf', get_rf_fn)
                                 ]:
