@@ -102,13 +102,14 @@ class PluginRR(BaseEstimator):
 class PluginRR2(BaseEstimator):
     """Version of PluginRR() for when we want to counterfactually vary a single covariate \"A\" as well as the treatment \"D\""""
 
-    def __init__(self, *, model_t, min_propensity=0):
-        self.model_t = clone(model_t, safe=False)
+    def __init__(self, *, model_t_A, model_t_treat, min_propensity=0):
+        self.model_t_A = clone(model_t_A, safe=False)
+        self.model_t_treat = clone(model_t_treat, safe=False)
         self.min_propensity = min_propensity
     
     def fit(self, X):
-        self.model_t_A = clone(self.model_t, safe=False).fit(X[:, 2:], X[:, 1])
-        self.model_t_treat = clone(self.model_t, safe=False).fit(X[:, 1:], X[:, 0])
+        self.model_t_A = clone(self.model_t_A, safe=False).fit(X[:, 2:], X[:, 1])
+        self.model_t_treat = clone(self.model_t_treat, safe=False).fit(X[:, 1:], X[:, 0])
         return self
     
     def predict(self, X):
