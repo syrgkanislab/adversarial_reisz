@@ -7,6 +7,36 @@ from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.base import BaseEstimator, clone
 from econml.grf._base_grf import BaseGRF
 from econml.utilities import cross_product
+from sklearn.base import BaseEstimator
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import PolynomialFeatures
+
+class PolyRF(BaseEstimator):
+    def __init__(self, *, rf, n_treatments):
+        self.rf = rf
+        self.n_treatments = n_treatments
+        return
+
+    def fit(self, X, y, sample_weight=None):
+        self.model_ = Pipeline([
+                        ('int', 
+                         ColumnTransformer([
+                                ('poly', PolynomialFeatures(degree=self.n_treatments,
+                                                            interaction_only=True, 
+                                                            include_bias=False), 
+                                np.arange(self.n_treatments))],
+                                remainder='passthrough')),
+                          ('rf', clone(self.rf))])
+        self.model_.fit(X, y, rf__sample_weight=sample_weight)
+        self.classes_ = self.model_.named_steps['rf'].classes_
+        return self
+
+    def predict_proba(self, X):
+        return self.model_.predict_proba(X)
+
+    def predict(self, X):
+        return self.model_.predict(X)
 
 def _mysign(x):
     return 2 * (x >= 0) - 1
@@ -89,7 +119,7 @@ class RFrr(BaseGRF):
                                  for feat_fn in self.riesz_feature_fns])
         mfeats = np.hstack([self.moment_fn(TX, feat_fn)
                             for feat_fn in self.riesz_feature_fns])
-        alpha = mfeats - y.reshape(-1, 1) * riesz_feats
+        alpha = 2 * (mfeats - y.reshape(-1, 1) * riesz_feats)
         riesz_cov_matrix = cross_product(riesz_feats, riesz_feats).reshape(
             (X.shape[0], n_riesz_feats, n_riesz_feats)) + self.l2 * np.eye(n_riesz_feats)
         pointJ = 2 * riesz_cov_matrix
@@ -127,14 +157,16 @@ class AdvEnsembleReisz(BaseEstimator):
 
     def _get_new_adversary(self):
         return RFrr(riesz_feature_fns=interactive_poly_feature_fns(self.degree, self.n_treatments),
-                    moment_fn=self.moment_fn, n_estimators=40, max_depth=2,
-                    min_samples_leaf=20, min_impurity_decrease=0.001, inference=False,
+                    l2=1e-3,
+                    moment_fn=self.moment_fn, n_estimators=100, max_depth=5, max_samples=.5,
+                    min_samples_leaf=50, min_impurity_decrease=1e-6, inference=False,
                     honest=True, random_state=123) if self.adversary == 'auto' else clone(self.adversary)
 
     def _get_new_learner(self):
-        return RandomForestClassifier(n_estimators=5, max_depth=2, criterion='gini',
-                                      bootstrap=False, min_samples_leaf=20, min_impurity_decrease=0.001,
-                                      random_state=123) if self.learner == 'auto' else clone(self.learner)
+        return PolyRF(rf=RandomForestClassifier(n_estimators=1, max_depth=self.n_treatments + 3,
+                        criterion='gini', bootstrap=False, min_samples_leaf=50, min_impurity_decrease=1e-6,
+                        random_state=123),
+                      n_treatments=self.n_treatments) if self.learner == 'auto' else clone(self.learner)
 
     def fit(self, X):
         T, W = X[:, :self.n_treatments], X[:, self.n_treatments:]
@@ -160,3 +192,62 @@ class AdvEnsembleReisz(BaseEstimator):
     def predict(self, X):
         return np.mean([self.max_abs_value * _mysign(l.predict_proba(X)
                                                      [:, -1] * l.classes_[-1] - 1 / 2) for l in self.learners], axis=0)
+
+
+class AdvEnsembleReiszRegVariant(BaseEstimator):
+
+    def __init__(self, *, moment_fn, n_treatments=1, 
+                 adversary='auto', learner='auto',
+                 max_abs_value=4, n_iter=100, degree=2):
+        self.moment_fn = moment_fn
+        self.n_treatments = n_treatments
+        self.adversary = adversary
+        self.learner = learner
+        self.max_abs_value = max_abs_value
+        self.n_iter = n_iter
+        self.degree = degree
+
+    def _get_new_adversary(self):
+        return RFrr(riesz_feature_fns=interactive_poly_feature_fns(self.degree, self.n_treatments), l2=1e-3,
+                    moment_fn=self.moment_fn, n_estimators=100, max_depth=5, max_samples=.5,
+                    min_samples_leaf=50, min_impurity_decrease=1e-6, inference=False,
+                    honest=True, random_state=123) if self.adversary == 'auto' else clone(self.adversary)
+
+    def _get_new_learner(self):
+        if self.learner == 'auto':
+            return Pipeline([
+                    ('int', 
+                     ColumnTransformer([
+                        ('poly', PolynomialFeatures(degree=self.n_treatments,
+                                                    interaction_only=True, 
+                                                    include_bias=False), 
+                         np.arange(self.n_treatments))],
+                         remainder='passthrough')),
+                    ('rf', RandomForestRegressor(n_estimators=1, max_depth=5,
+                        bootstrap=False, min_samples_leaf=50, min_impurity_decrease=1e-4,
+                        random_state=123))])
+        else:
+            clone(self.learner)
+
+    def fit(self, X):
+        T, W = X[:, :self.n_treatments], X[:, self.n_treatments:]
+        max_value = self.max_abs_value
+        adversary = self._get_new_adversary().fit(W, T, np.zeros(T.shape[0]))
+        learners = []
+        weights = []
+        h = 0
+        for it in range(self.n_iter):
+            test = adversary.predict(X).flatten()
+            learners.append(self._get_new_learner().fit(X, test))
+            h = h * it / (it + 1)
+            preds = learners[it].predict(X)
+            weights.append(max_value / np.sqrt(np.mean(preds**2)))
+            h += weights[it] * preds / (it + 1)
+            adversary.fit(W, T, h)
+
+        self.learners = learners
+        self.weights = weights
+        return self
+
+    def predict(self, X):
+        return np.mean([w * l.predict(X) for (w, l) in zip(self.weights, self.learners)], axis=0)
