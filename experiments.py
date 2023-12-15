@@ -224,10 +224,12 @@ def get_adversary(n_z, n_hidden, p):
                          nn.Dropout(p=p), nn.Linear(n_hidden, n_hidden), nn.ReLU(),
                          nn.Dropout(p=p), nn.Linear(n_hidden, 1))
 
-def get_nnet_fn(X):
-    n_x = X.shape[1]
-    return lambda: FitParamsWrapper(AdvReisz(get_learner(n_x, 100, 0.),
-                                             get_adversary(n_x, 100, 0.),
+def get_nnet_fn(X):  # "get_agmm_fn"
+    torch.manual_seed(123)
+    n_hidden = 100
+    dropout = 0.0
+    return lambda: FitParamsWrapper(AdvReisz(get_learner(X.shape[1], n_hidden, dropout),
+                                             get_adversary(X.shape[1], n_hidden, dropout),
                                              moment_fn),
                                    val_fr=.2,
                                    preprocess_epochs=200,
