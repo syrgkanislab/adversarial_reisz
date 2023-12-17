@@ -282,7 +282,7 @@ def run_experiment(prefix, get_reisz_fn, get_reg_fn, n_splits, n_samples, *, dgp
                                                  for it in np.arange(start_sample, start_sample + sample_its).astype(int))
     joblib.dump(results, os.path.join(target_dir, f'{prefix}_{dgp}_n_{n_samples}_{start_sample}_{sample_its}.jbl'))
 
-def advkernel_experiments(n_samples_list, *, dgp=0, target_dir = '.', start_sample=1, sample_its=100, kernelid=0, n_jobs=-1, gcv_reg=False):
+def advkernel_experiments(n_samples_list, *, dgp=0, target_dir = '.', start_sample=1, sample_its=100, kernelid, n_jobs=-1, gcv_reg=False):
 
     kernel = get_kernel(kernelid)
     
@@ -300,7 +300,7 @@ def advkernel_postprocess(n_samples_list, *, dgp=0, target_dir = '.', start_samp
     return postprocess([('advrkhs', 'advreisz_nocfit'), ('advrkhs_cfit', 'advreisz_5fold_cfit')],
                        n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its)
 
-def kernel_experiments(n_samples_list, *, dgp=0, target_dir = '.', start_sample=1, sample_its=100, kernelid=0, n_jobs=-1, gcv_reg=False):
+def kernel_experiments(n_samples_list, *, dgp=0, target_dir = '.', start_sample=1, sample_its=100, kernelid, n_jobs=-1, gcv_reg=False):
 
     kernel = get_kernel(kernelid)
     get_reg_fn = get_ls_reg_fn if not gcv_reg else get_gcv_reg_fn
@@ -368,7 +368,7 @@ def pluginrf_postprocess(n_samples_list, *, dgp=0, target_dir = '.', start_sampl
                        n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its)
 
 
-def nystrom_advkernel_experiments(n_samples_list, *, dgp=0, target_dir = '.', start_sample=1, sample_its=100, kernelid=0, n_jobs=-1, gcv_reg=False):
+def nystrom_advkernel_experiments(n_samples_list, *, dgp=0, target_dir = '.', start_sample=1, sample_its=100, kernelid, n_jobs=-1, gcv_reg=False):
     get_reg_fn = get_ls_reg_fn if not gcv_reg else get_gcv_reg_fn
     get_reisz_fn = lambda X: get_nys_advkernel_fn(X, kernelid)
 
@@ -382,7 +382,7 @@ def nystrom_advkernel_postprocess(n_samples_list, *, dgp=0, target_dir = '.', st
     return postprocess([('nysadvrkhs', 'advnystromreisz_nocfit'), ('nysadvrkhs_cfit', 'advnystromreisz_5fold_cfit')],
                        n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its)
 
-def nystrom_kernel_experiments(n_samples_list, *, dgp=0, target_dir = '.', start_sample=1, sample_its=100, kernelid=0, n_jobs=-1, gcv_reg=False):
+def nystrom_kernel_experiments(n_samples_list, *, dgp=0, target_dir = '.', start_sample=1, sample_its=100, kernelid, n_jobs=-1, gcv_reg=False):
     get_reg_fn = get_ls_reg_fn if not gcv_reg else get_gcv_reg_fn
     get_reisz_fn = lambda X: get_nys_kernel_fn(X, kernelid)
 
