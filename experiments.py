@@ -179,7 +179,9 @@ def get_rf_plugin_fn(X):
     return lambda: PluginRR(model_t=best_model, min_propensity=.05)
 
 def get_rf_fn(X):
-    return lambda: AdvEnsembleReisz(moment_fn=moment_fn, max_abs_value=20, degree=1)
+    return lambda: AdvEnsembleReisz(moment_fn=moment_fn, n_treatments=1,
+                                    max_abs_value=20, degree=1,
+                                    max_depth=5, min_samples_leaf=20)
 
 def get_splin_fn(X):
     feat = Pipeline([('p', PolynomialFeatures(degree=1, include_bias=False))])
