@@ -180,8 +180,11 @@ def get_rf_plugin_fn(X):
 
 def get_rf_fn(X):
     return lambda: AdvEnsembleReisz(moment_fn=moment_fn, n_treatments=1,
-                                    max_abs_value=20, degree=1,
-                                    max_depth=5, min_samples_leaf=20)
+                                    max_abs_value=20,
+                                    degree=1,
+                                    max_depth=2,
+                                    min_samples_leaf=20,
+                                    n_estimators_learner=5)
 
 def get_splin_fn(X):
     feat = Pipeline([('p', PolynomialFeatures(degree=1, include_bias=False))])
