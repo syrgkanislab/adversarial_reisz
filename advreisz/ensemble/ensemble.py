@@ -146,7 +146,13 @@ class AdvEnsembleReisz(BaseEstimator):
 
     def __init__(self, *, moment_fn, n_treatments=1, 
                  adversary='auto', learner='auto',
-                 max_abs_value=4, n_iter=100, degree=2):
+                 max_abs_value=4, n_iter=100, degree=2,
+                 min_samples_leaf=50,
+                 max_depth=5,
+                 n_estimators_learner=1,
+                 min_impurity_decrease_learner=1e-4,
+                 n_estimators_adversary=100,
+                 min_impurity_decrease_adversary=1e-4,):
         self.moment_fn = moment_fn
         self.n_treatments = n_treatments
         self.adversary = adversary
@@ -154,18 +160,34 @@ class AdvEnsembleReisz(BaseEstimator):
         self.max_abs_value = max_abs_value
         self.n_iter = n_iter
         self.degree = degree
+        self.min_samples_leaf = min_samples_leaf
+        self.max_depth = max_depth
+        self.n_estimators_learner = n_estimators_learner
+        self.min_impurity_decrease_learner = min_impurity_decrease_learner
+        self.n_estimators_adversary = n_estimators_adversary
+        self.min_impurity_decrease_adversary = min_impurity_decrease_adversary
+
 
     def _get_new_adversary(self):
         return RFrr(riesz_feature_fns=interactive_poly_feature_fns(self.degree, self.n_treatments),
                     l2=1e-3,
-                    moment_fn=self.moment_fn, n_estimators=100, max_depth=5, max_samples=.5,
-                    min_samples_leaf=50, min_impurity_decrease=1e-4, inference=False,
+                    max_depth=max(self.n_treatments, self.max_depth),
+                    moment_fn=self.moment_fn,
+                    n_estimators=self.n_estimators_adversary,
+                    max_samples=.5,
+                    min_samples_leaf=self.min_samples_leaf,
+                    min_impurity_decrease=self.min_impurity_decrease_adversary,
+                    inference=False,
                     honest=True, random_state=123) if self.adversary == 'auto' else clone(self.adversary)
 
     def _get_new_learner(self):
-        return PolyRF(rf=RandomForestClassifier(n_estimators=1, max_depth=self.n_treatments + 3,
-                        criterion='gini', bootstrap=False, min_samples_leaf=50, min_impurity_decrease=1e-4,
-                        random_state=123),
+        return PolyRF(rf=RandomForestClassifier(n_estimators=self.n_estimators_learner,
+                                                max_depth=max(self.n_treatments, self.max_depth),
+                                                criterion='gini',
+                                                bootstrap=False,
+                                                min_samples_leaf=self.min_samples_leaf,
+                                                min_impurity_decrease=self.min_impurity_decrease_learner,
+                                                random_state=123),
                       n_treatments=self.n_treatments) if self.learner == 'auto' else clone(self.learner)
 
     def fit(self, X):
@@ -210,7 +232,7 @@ class AdvEnsembleReiszRegVariant(BaseEstimator):
     def _get_new_adversary(self):
         return RFrr(riesz_feature_fns=interactive_poly_feature_fns(self.degree, self.n_treatments), l2=1e-3,
                     moment_fn=self.moment_fn, n_estimators=100, max_depth=5, max_samples=.5,
-                    min_samples_leaf=50, min_impurity_decrease=1e-4, inference=False,
+                    min_samples_leaf=20, min_impurity_decrease=1e-4, inference=False,
                     honest=True, random_state=123) if self.adversary == 'auto' else clone(self.adversary)
 
     def _get_new_learner(self):
