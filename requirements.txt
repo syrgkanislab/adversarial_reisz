@@ -509,10 +509,11 @@ tinycss2==1.4.0
 tokenizers==0.21.0
 toml==0.10.2
 toolz==0.12.1
-torch @ https://download.pytorch.org/whl/cu124/torch-2.5.1%2Bcu124-cp311-cp311-linux_x86_64.whl
-torchaudio @ https://download.pytorch.org/whl/cu124/torchaudio-2.5.1%2Bcu124-cp311-cp311-linux_x86_64.whl
+torch==2.0.1
+torchdata==0.6.1
 torchsummary==1.5.1
-torchvision @ https://download.pytorch.org/whl/cu124/torchvision-0.20.1%2Bcu124-cp311-cp311-linux_x86_64.whl
+torchtext==0.15.2
+torchvision==0.15.2
 tornado==6.3.3
 tqdm==4.67.1
 traitlets==5.7.1
