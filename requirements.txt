@@ -390,7 +390,6 @@ pyerfa==2.0.1.5
 pygame==2.6.1
 pygit2==1.16.0
 Pygments==2.18.0
-PyGObject==3.42.1
 PyJWT==2.10.1
 pylibcudf-cu12 @ https://pypi.nvidia.com/pylibcudf-cu12/pylibcudf_cu12-24.12.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
 pylibcugraph-cu12==24.12.0
