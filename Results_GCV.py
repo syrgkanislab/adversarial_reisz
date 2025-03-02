@@ -35,15 +35,7 @@ from experiments import *
 
 
 
-def get_reg_fn(X, y):
-    est = Pipeline([('p', PolynomialFeatures(degree=2, include_bias=False)),
-                    ('s', StandardScaler()),
-                    ('lasso', LassoCV(max_iter=10000, random_state=123))])
-    est.fit(X, y)
-
-    return lambda: Pipeline([('p', PolynomialFeatures(degree=2, include_bias=False)),
-                             ('s', StandardScaler()),
-                             ('lasso', Lasso(alpha=est.named_steps['lasso'].alpha_, max_iter=10000, random_state=123))])
+get_reg_fn = get_gcv_reg_fn  # Testing
 
 def get_splin_fn(X):
     return lambda: SparseLinearAdvRiesz(moment_fn,
@@ -186,7 +178,7 @@ if synthetic:
 
 
 
-path = './main_results'
+path = './gcv_results'
 os.chdir(path)
 np.random.seed(123)
 
@@ -299,10 +291,10 @@ def do_analysis_charitable(y, n_splits, rescale=True):
         p, s, l, u = est.avg_moment()
         if rescale==True:
             res[name] = {'point': p * y_scale, 'stderr': s * y_scale,
-                                    'lower': l * y_scale, 'upper': u * y_scale}
+                         'lower': l * y_scale, 'upper': u * y_scale}
         else:
             res[name] = {'point': p, 'stderr': s,
-                                    'lower': l, 'upper': u}
+                         'lower': l, 'upper': u}
 
     res = pd.DataFrame(res).transpose()
     return res
