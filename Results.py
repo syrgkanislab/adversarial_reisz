@@ -321,42 +321,42 @@ joblib.dump(res, 'charitable_gave_ns5.joblib')
 
 
 
-def do_analysis_charitable(target_dir, dgp, n_samples_list, sample_its, n_jobs, gcv):
-    pluginlg_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
-    pluginrf_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
-    splin_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
-    advkernel_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, kernelid=2, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
-    nystrom_advkernel_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, kernelid=2, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
-    rf_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
-    nnet_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
+def do_analysis_charitable(target_dir, dgp, n_samples_list, start_sample, sample_its, n_jobs, gcv):
+    pluginlg_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
+    pluginrf_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
+    splin_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
+    advkernel_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, kernelid=2, start_sample=start_sample, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
+    nystrom_advkernel_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, kernelid=2, start_sample=start_sample, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
+    rf_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
+    nnet_experiments(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its, n_jobs=n_jobs, gcv_reg=gcv)
 
-    res = [pluginlg_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its),
-           pluginrf_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its),
-           splin_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its),
-           advkernel_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its),
-           nystrom_advkernel_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its),
-           rf_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its),
-           nnet_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, sample_its=sample_its)]
+    res = [pluginlg_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its),
+           pluginrf_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its),
+           splin_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its),
+           advkernel_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its),
+           nystrom_advkernel_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its),
+           rf_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its),
+           nnet_postprocess(n_samples_list, dgp=dgp, target_dir=target_dir, start_sample=start_sample, sample_its=sample_its)]
     
     return res
 
-res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [100], sample_its = 100, n_jobs = -1, gcv = True)
+res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [100], start_sample=0, sample_its = 100, n_jobs = -1, gcv = True)
 joblib.dump(res, 'synthetic_dgp0_100.joblib')
 
-res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [200], sample_its = 100, n_jobs = -1, gcv = True)
+res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [200], start_sample=0, sample_its = 100, n_jobs = -1, gcv = True)
 joblib.dump(res, 'synthetic_dgp0_200.joblib')
 
-res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [500], sample_its = 100, n_jobs = -1, gcv = True)
+res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [500], start_sample=0, sample_its = 100, n_jobs = -1, gcv = True)
 joblib.dump(res, 'synthetic_dgp0_500.joblib')
 
-res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [1000], sample_its = 100, n_jobs = -1, gcv = True)
+res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [1000], start_sample=0, sample_its = 100, n_jobs = -1, gcv = True)
 joblib.dump(res, 'synthetic_dgp0_1000.joblib')
 
-res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [2000], sample_its = 100, n_jobs = -1, gcv = True)
+res = do_analysis_charitable(target_dir = '', dgp = 0, n_samples_list = [2000], start_sample=0, sample_its = 100, n_jobs = -1, gcv = True)
 joblib.dump(res, 'synthetic_dgp0_2000.joblib')
 
-res = do_analysis_charitable(target_dir = '', dgp = 3, n_samples_list = [1000], sample_its = 100, n_jobs = -1, gcv = True)
+res = do_analysis_charitable(target_dir = '', dgp = 3, n_samples_list = [1000], start_sample=0, sample_its = 100, n_jobs = -1, gcv = True)
 joblib.dump(res, 'synthetic_dgp3.joblib')
 
-res = do_analysis_charitable(target_dir = '', dgp = 1, n_samples_list = [100], sample_its = 100, n_jobs = -1, gcv = True)
+res = do_analysis_charitable(target_dir = '', dgp = 1, n_samples_list = [100], start_sample=0, sample_its = 100, n_jobs = -1, gcv = True)
 joblib.dump(res, 'synthetic_dgp1.joblib')
