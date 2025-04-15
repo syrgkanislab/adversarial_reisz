@@ -1,5 +1,5 @@
 # How to set up a virtual environment on a SLURM-based HPC cluster
-This mini-guide contains instructions for using either virtualenv or mamba to set up a virtual environment. Use whichever is more convenient, which may depend on what comes pre-installed on your HPC cluster. Credit: William Liu and Marvin Lob.
+This mini-guide contains instructions for using either virtualenv or mamba to set up a virtual environment. Use whichever is more convenient, which may depend on what comes pre-installed on your HPC cluster.
 
 ## virtualenv
 To set up the environment using the `requirements.txt`, run the following code after replacing the `<...>` placeholders:
