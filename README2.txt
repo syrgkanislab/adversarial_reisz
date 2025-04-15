@@ -32,7 +32,7 @@ To create and set up the environment using `requirements.txt`, run the following
 
 ```
 cd <WORKING_DIRECTORY> 
-module load <PATH_TO_PYTHON_MODULE> 
+module load <PATH_TO_PYTHON_MODULE>
 mamba create -n <ENV_NAME> python=3.10.16 
 mamba activate <ENV_NAME> 
 python3 -m pip install -r requirements.txt
@@ -42,7 +42,7 @@ python3 -m pip install -r requirements.txt
 Make sure to activate the environment and load the correct Python version within your SLURM `.sbatch` script:
 
 ```
-module load python/3.10.16-fasrc01 
+module load <PATH_TO_PYTHON_MODULE>
 source ~/.bashrc 
 eval "$(conda shell.bash hook)" 
 conda activate <ENV_NAME>
