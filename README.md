@@ -18,5 +18,3 @@ sbatch <PATH TO advriesz_gcv.sbatch>
 The code is confirmed to work with Python 3.10.16.
 
 The empirical data used in this project is the Karlan and List (2007) dataset, publicly available from [this link](https://github.com/gsbDBI/ExperimentData/raw/master/Charitable/RawData/AER%20merged.dta). For convenience, a copy of it is already contained within this repository, and you do not need to separately download it.
-
-[^*]: Warning: The leftover files `AdversarialReisz.ipynb` and `401k.ipynb` (not used for the paper) do not have a fixed seed for advnnet.
